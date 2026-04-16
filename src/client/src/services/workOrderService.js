@@ -10,7 +10,7 @@ const WorkOrderService = {
       // Add filters to params if provided
       if (filters.status) params.append('status', filters.status);
       if (filters.customer) params.append('customer', filters.customer);
-      if (filters.vehicle) params.append('vehicle', filters.vehicle);
+      if (filters.property) params.append('property', filters.property);
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);
       if (filters.excludeStatuses) params.append('excludeStatuses', filters.excludeStatuses);
@@ -81,7 +81,7 @@ const WorkOrderService = {
   // Add part to work order
   addPart: async (id, partData) => {
     try {
-      const response = await API.post(`/workorders/${id}/parts`, partData);
+      const response = await API.post(`/workorders/${id}/materials`, partData);
       return response.data;
     } catch (error) {
       console.error(`Error adding part to work order with ID ${id}:`, error);
@@ -92,7 +92,7 @@ const WorkOrderService = {
   // Add part from inventory to work order (deducts inventory QOH)
   addPartFromInventory: async (id, data) => {
     try {
-      const response = await API.post(`/workorders/${id}/parts/from-inventory`, data);
+      const response = await API.post(`/workorders/${id}/materials/from-inventory`, data);
       return response.data;
     } catch (error) {
       console.error(`Error adding inventory part to work order ${id}:`, error);

@@ -6,7 +6,7 @@ const QuoteService = {
     try {
       const params = new URLSearchParams();
       if (filters.customer) params.append('customer', filters.customer);
-      if (filters.vehicle) params.append('vehicle', filters.vehicle);
+      if (filters.property) params.append('property', filters.property);
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);
       if (filters.includeArchived) params.append('includeArchived', 'true');
@@ -110,7 +110,7 @@ const QuoteService = {
   // Add part to quote
   addPart: async (id, partData) => {
     try {
-      const response = await API.post(`/workorders/${id}/parts`, partData);
+      const response = await API.post(`/workorders/${id}/materials`, partData);
       return response.data;
     } catch (error) {
       console.error(`Error adding part to quote with ID ${id}:`, error);

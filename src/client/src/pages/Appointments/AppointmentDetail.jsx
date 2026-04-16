@@ -286,7 +286,7 @@ const AppointmentDetail = () => {
               <p className="text-sm text-gray-500">Vehicle</p>
               {appointment.vehicle?._id ? (
                 <Link
-                  to={`/vehicles/${appointment.vehicle._id}`}
+                  to={`/properties/${appointment.vehicle._id}`}
                   className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
                 >
                   {appointment.vehicle?.year} {appointment.vehicle?.make} {appointment.vehicle?.model}

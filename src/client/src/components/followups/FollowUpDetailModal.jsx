@@ -190,7 +190,7 @@ const FollowUpDetailModal = ({ isOpen, onClose, followUpId, followUpData, onUpda
     }
     if (followUp.vehicle) {
       const vLabel = `${followUp.vehicle.year || ''} ${followUp.vehicle.make || ''} ${followUp.vehicle.model || ''}`.trim();
-      links.push({ label: vLabel, href: `/vehicles/${followUp.vehicle._id}` });
+      links.push({ label: vLabel, href: `/properties/${followUp.vehicle._id}` });
     }
     if (followUp.workOrder) {
       const isQuote = followUp.entityType === 'quote';

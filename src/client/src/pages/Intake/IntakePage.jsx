@@ -84,7 +84,7 @@ const IntakePage = () => {
     } else if (workOrder) {
       navigate(intakeMode === 'quote' ? `/quotes/${workOrder._id}` : `/work-orders/${workOrder._id}`);
     } else if (vehicle) {
-      navigate(`/vehicles/${vehicle._id}`);
+      navigate(`/properties/${vehicle._id}`);
     } else if (customer) {
       navigate(`/customers/${customer._id}`);
     } else {

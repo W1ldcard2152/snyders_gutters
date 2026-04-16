@@ -619,7 +619,7 @@ const QuoteDetail = () => {
               <p className="text-sm text-gray-500">Vehicle</p>
               {quote.vehicle ? (
                 <Link
-                  to={`/vehicles/${quote.vehicle._id}`}
+                  to={`/properties/${quote.vehicle._id}`}
                   className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
                 >
                   {quote.vehicle.year} {quote.vehicle.make} {quote.vehicle.model}

@@ -181,7 +181,7 @@ const CustomerDetail = () => {
           title="Vehicles" 
           headerActions={
             <Button 
-              to={`/vehicles/new?customer=${id}`} 
+              to={`/properties/new?customer=${id}`}
               variant="outline"
               size="sm"
             >
@@ -209,7 +209,7 @@ const CustomerDetail = () => {
                     </div>
                     <div>
                       <Button
-                        to={`/vehicles/${vehicle._id}`}
+                        to={`/properties/${vehicle._id}`}
                         variant="outline"
                         size="sm"
                       >

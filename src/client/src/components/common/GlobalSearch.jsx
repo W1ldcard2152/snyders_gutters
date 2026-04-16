@@ -63,8 +63,8 @@ const GlobalSearch = () => {
       case 'customer':
         navigate(`/customers/${result.id}`);
         break;
-      case 'vehicle':
-        navigate(`/vehicles/${result.id}`);
+      case 'property':
+        navigate(`/properties/${result.id}`);
         break;
       case 'workorder':
         navigate(`/work-orders/${result.id}`);
@@ -84,8 +84,8 @@ const GlobalSearch = () => {
     switch (type) {
       case 'customer':
         return '👤';
-      case 'vehicle':
-        return '🚗';
+      case 'property':
+        return '🏠';
       case 'workorder':
         return '🔧';
       default:
@@ -133,7 +133,7 @@ const GlobalSearch = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search customers, vehicles, work orders..."
+          placeholder="Search customers, properties, work orders..."
           className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         />
         {searchQuery && (

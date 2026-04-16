@@ -116,11 +116,11 @@ const App = () => {
                       <Route path="/customers/:id" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><CustomerDetail /></RoleRoute>} />
                       <Route path="/customers/:id/edit" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><CustomerForm /></RoleRoute>} />
                       
-                      {/* Vehicle Routes (office staff) */}
-                      <Route path="/vehicles" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleList /></RoleRoute>} />
-                      <Route path="/vehicles/new" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleForm /></RoleRoute>} />
-                      <Route path="/vehicles/:id" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleDetail /></RoleRoute>} />
-                      <Route path="/vehicles/:id/edit" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleForm /></RoleRoute>} />
+                      {/* Property Routes (office staff) */}
+                      <Route path="/properties" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleList /></RoleRoute>} />
+                      <Route path="/properties/new" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleForm /></RoleRoute>} />
+                      <Route path="/properties/:id" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleDetail /></RoleRoute>} />
+                      <Route path="/properties/:id/edit" element={<RoleRoute roles={['admin', 'management', 'service-writer']}><VehicleForm /></RoleRoute>} />
                       
                       {/* Work Order Routes */}
                       <Route path="/work-orders" element={<WorkOrderList />} />
@@ -162,8 +162,8 @@ const App = () => {
                       {/* Feedback Admin Route (admin only) */}
                       <Route path="/feedback" element={<RoleRoute roles={['admin']}><FeedbackAdminPage /></RoleRoute>} />
 
-                      {/* Parts Routes */}
-                      <Route path="/parts" element={<PartsList />} />
+                      {/* Materials Routes */}
+                      <Route path="/materials" element={<PartsList />} />
 
                       {/* Inventory Route */}
                       <Route path="/inventory" element={<InventoryList />} />

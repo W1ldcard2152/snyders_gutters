@@ -8,7 +8,7 @@ const InvoiceService = {
       
       // Add filters to params if provided
       if (filters.customer) params.append('customer', filters.customer);
-      if (filters.vehicle) params.append('vehicle', filters.vehicle);
+      if (filters.property) params.append('property', filters.property);
       if (filters.workOrder) params.append('workOrder', filters.workOrder);
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);

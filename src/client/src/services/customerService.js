@@ -70,7 +70,7 @@ const CustomerService = {
   // Get customer vehicles
   getCustomerVehicles: async (id) => {
     try {
-      const response = await API.get(`/customers/${id}/vehicles`);
+      const response = await API.get(`/customers/${id}/properties`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching vehicles for customer with ID ${id}:`, error);

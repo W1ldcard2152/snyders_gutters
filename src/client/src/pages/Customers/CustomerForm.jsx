@@ -275,7 +275,7 @@ const CustomerForm = () => {
             label: 'Yes (Add New Vehicle)',
             variant: 'primary',
             onClick: () => {
-              navigate(`/vehicles/new?customer=${newCustomerId}`);
+              navigate(`/properties/new?customer=${newCustomerId}`);
               handleCloseAddVehiclePrompt();
             }
           },

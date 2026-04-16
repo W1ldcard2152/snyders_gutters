@@ -147,7 +147,7 @@ const PartsForm = () => {
         await partService.createPart(partData);
       }
 
-      navigate('/parts');
+      navigate('/materials');
     } catch (err) {
       console.error('Error saving part:', err);
       setError(err.response?.data?.message || 'Failed to save part. Please try again.');

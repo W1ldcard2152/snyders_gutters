@@ -68,7 +68,7 @@ const VehicleDetail = () => {
   const handleDeleteVehicle = async () => {
     try {
       await VehicleService.deleteVehicle(id);
-      navigate('/vehicles');
+      navigate('/properties');
     } catch (err) {
       console.error('Error deleting vehicle:', err);
       const errorMessage = err.response?.data?.message || 'Failed to delete vehicle. Please try again later.';
@@ -190,7 +190,7 @@ const VehicleDetail = () => {
         </h1>
         <div className="flex space-x-2">
           <Button
-            to={`/vehicles/${id}/edit`}
+            to={`/properties/${id}/edit`}
             variant="primary"
           >
             Edit Vehicle

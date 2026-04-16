@@ -12,7 +12,7 @@ const VehicleService = {
       if (filters.make) params.append('make', filters.make);
       if (filters.model) params.append('model', filters.model);
       
-      const response = await API.get(`/vehicles?${params.toString()}`);
+      const response = await API.get(`/properties?${params.toString()}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching vehicles:', error);
@@ -23,7 +23,7 @@ const VehicleService = {
   // Get a vehicle by ID
   getVehicle: async (id) => {
     try {
-      const response = await API.get(`/vehicles/${id}`);
+      const response = await API.get(`/properties/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching vehicle with ID ${id}:`, error);
@@ -43,7 +43,7 @@ const VehicleService = {
         }));
       }
       
-      const response = await API.post('/vehicles', vehicleData);
+      const response = await API.post('/properties', vehicleData);
       return response.data;
     } catch (error) {
       console.error('Error creating vehicle:', error);
@@ -73,7 +73,7 @@ const VehicleService = {
         }
       }
       
-      const response = await API.patch(`/vehicles/${id}`, vehicleData);
+      const response = await API.patch(`/properties/${id}`, vehicleData);
       return response.data;
     } catch (error) {
       console.error(`Error updating vehicle with ID ${id}:`, error);
@@ -84,7 +84,7 @@ const VehicleService = {
   // Delete a vehicle
   deleteVehicle: async (id) => {
     try {
-      const response = await API.delete(`/vehicles/${id}`);
+      const response = await API.delete(`/properties/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Error deleting vehicle with ID ${id}:`, error);
@@ -95,7 +95,7 @@ const VehicleService = {
   // Search vehicles
   searchVehicles: async (query) => {
     try {
-      const response = await API.get(`/vehicles/search?query=${query}`);
+      const response = await API.get(`/properties/search?query=${query}`);
       return response.data;
     } catch (error) {
       console.error(`Error searching vehicles with query "${query}":`, error);
@@ -106,7 +106,7 @@ const VehicleService = {
   // Get vehicle service history
   getVehicleServiceHistory: async (id) => {
     try {
-      const response = await API.get(`/vehicles/${id}/service-history`);
+      const response = await API.get(`/properties/${id}/service-history`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching service history for vehicle with ID ${id}:`, error);
@@ -125,13 +125,13 @@ const VehicleService = {
       };
       
       // Get current vehicle data
-      const vehicleResponse = await API.get(`/vehicles/${id}`);
+      const vehicleResponse = await API.get(`/properties/${id}`);
       const vehicleData = vehicleResponse.data.vehicle || vehicleResponse.data;
-      
+
       if (!vehicleData) {
         throw new Error('Vehicle data not found in response');
       }
-      
+
       // Update mileage history
       const updatedVehicle = {
         ...vehicleData,
@@ -142,9 +142,9 @@ const VehicleService = {
         // Update current mileage if new record is higher
         currentMileage: Math.max(vehicleData.currentMileage || 0, formattedData.mileage)
       };
-      
+
       // Update vehicle
-      const response = await API.patch(`/vehicles/${id}`, updatedVehicle);
+      const response = await API.patch(`/properties/${id}`, updatedVehicle);
       return response.data;
     } catch (error) {
       console.error(`Error adding mileage record for vehicle with ID ${id}:`, error);
@@ -166,7 +166,7 @@ const VehicleService = {
   // Get mileage at a specific date (estimated if exact date not available)
   getMileageAtDate: async (id, date) => {
     try {
-      const vehicleResponse = await API.get(`/vehicles/${id}`);
+      const vehicleResponse = await API.get(`/properties/${id}`);
       const vehicle = vehicleResponse.data.vehicle || vehicleResponse.data;
       
       if (!vehicle.mileageHistory || vehicle.mileageHistory.length === 0) {

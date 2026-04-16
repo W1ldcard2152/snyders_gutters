@@ -118,7 +118,7 @@ const VehicleList = () => {
     <div className="container mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Vehicles</h1>
-        <Button to="/vehicles/new" variant="primary">
+        <Button to="/properties/new" variant="primary">
           Add New Vehicle
         </Button>
       </div>
@@ -201,14 +201,14 @@ const VehicleList = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <Button
-                          to={`/vehicles/${vehicle._id}`}
+                          to={`/properties/${vehicle._id}`}
                           variant="outline"
                           size="sm"
                         >
                           View
                         </Button>
                         <Button
-                          to={`/vehicles/${vehicle._id}/edit`}
+                          to={`/properties/${vehicle._id}/edit`}
                           variant="outline"
                           size="sm"
                         >

@@ -1523,7 +1523,7 @@ const DocumentDetail = () => {
             <div className="pt-2">
               <p className="text-sm text-gray-500">Vehicle</p>
               {workOrder.vehicle?._id ? (
-                <Link to={`/vehicles/${workOrder.vehicle._id}`}
+                <Link to={`/properties/${workOrder.vehicle._id}`}
                   className="font-medium text-primary-600 hover:text-primary-800 hover:underline">
                   {workOrder.vehicle.year} {workOrder.vehicle.make} {workOrder.vehicle.model}
                 </Link>

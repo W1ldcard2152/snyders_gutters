@@ -133,7 +133,7 @@ const AppointmentService = {
   // Get vehicle appointments
   getVehicleAppointments: async (vehicleId) => {
     try {
-      const response = await API.get(`/appointments/vehicle/${vehicleId}`);
+      const response = await API.get(`/appointments/property/${vehicleId}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching appointments for vehicle with ID ${vehicleId}:`, error);

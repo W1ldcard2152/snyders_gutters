@@ -150,7 +150,7 @@ const VehicleForm = () => {
       if (values.customer) {
         navigate(`/customers/${values.customer}`);
       } else {
-        navigate('/vehicles');
+        navigate('/properties');
       }
     } catch (err) {
       console.error('Error saving vehicle:', err);
@@ -697,7 +697,7 @@ const VehicleForm = () => {
                 <Button
                   type="button"
                   variant="light"
-                  onClick={() => navigate(id ? `/vehicles/${id}` : '/vehicles')}
+                  onClick={() => navigate(id ? `/properties/${id}` : '/properties')}
                 >
                   Cancel
                 </Button>
