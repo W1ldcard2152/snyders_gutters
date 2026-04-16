@@ -15,8 +15,8 @@ router.get('/search', customerController.searchCustomers);
 // Check if customer exists by phone
 router.get('/check-phone', customerController.checkExistingCustomerByPhone);
 
-// Get customer vehicles
-router.get('/:id/vehicles', customerController.getCustomerVehicles);
+// Get customer properties
+router.get('/:id/properties', customerController.getCustomerProperties);
 
 // Basic CRUD routes
 router

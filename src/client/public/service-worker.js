@@ -1,8 +1,8 @@
-// Phoenix CRM Service Worker - Enhanced PWA Functionality
-const CACHE_NAME = 'phoenix-crm-v3';
-const STATIC_CACHE = 'phoenix-crm-static-v3';
-const DYNAMIC_CACHE = 'phoenix-crm-dynamic-v3';
-const API_CACHE = 'phoenix-crm-api-v3';
+// Snyder's Gutters CRM Service Worker - Enhanced PWA Functionality
+const CACHE_NAME = 'snyders-gutters-crm-v1';
+const STATIC_CACHE = 'snyders-gutters-crm-static-v1';
+const DYNAMIC_CACHE = 'snyders-gutters-crm-dynamic-v1';
+const API_CACHE = 'snyders-gutters-crm-api-v1';
 
 // Static assets to cache immediately
 const STATIC_ASSETS = [

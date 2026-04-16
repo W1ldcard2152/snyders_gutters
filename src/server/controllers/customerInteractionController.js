@@ -25,7 +25,7 @@ exports.getCustomerInteractions = async (req, res) => {
     const { customerId } = req.params;
     
     const interactions = await CustomerInteraction.find({ customer: customerId })
-      .populate('workOrder', 'date status serviceRequested')
+      .populate('workOrder', 'date status serviceNotes services')
       .populate('createdBy', 'name')
       .populate('completedBy', 'name')
       .sort({ createdAt: -1 });
@@ -44,7 +44,7 @@ exports.getPendingFollowUps = async (req, res) => {
       followUpRequired: true,
       completedAt: null 
     })
-      .populate('workOrder', 'date status serviceRequested')
+      .populate('workOrder', 'date status serviceNotes services')
       .populate('customer', 'name phone email')
       .populate('createdBy', 'name')
       .sort({ followUpDate: 1, createdAt: -1 });

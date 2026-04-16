@@ -1,6 +1,6 @@
 const FollowUp = require('../models/FollowUp');
 const WorkOrder = require('../models/WorkOrder');
-const Vehicle = require('../models/Vehicle');
+const Property = require('../models/Property');
 const Appointment = require('../models/Appointment');
 const Invoice = require('../models/Invoice');
 const catchAsync = require('../utils/catchAsync');
@@ -17,40 +17,40 @@ const resolveHierarchy = async (entityType, entityId) => {
       refs.customer = entityId;
       break;
 
-    case 'vehicle': {
-      const vehicle = await Vehicle.findById(entityId).select('customer');
-      if (!vehicle) throw new Error('Vehicle not found');
-      refs.vehicle = entityId;
-      refs.customer = vehicle.customer;
+    case 'property': {
+      const property = await Property.findById(entityId).select('customer');
+      if (!property) throw new Error('Property not found');
+      refs.property = entityId;
+      refs.customer = property.customer;
       break;
     }
 
     case 'workOrder':
     case 'quote': {
-      const wo = await WorkOrder.findById(entityId).select('customer vehicle');
+      const wo = await WorkOrder.findById(entityId).select('customer property');
       if (!wo) throw new Error('Work order not found');
       refs.workOrder = entityId;
-      refs.vehicle = wo.vehicle;
+      refs.property = wo.property;
       refs.customer = wo.customer;
       break;
     }
 
     case 'invoice': {
-      const inv = await Invoice.findById(entityId).select('workOrder customer vehicle');
+      const inv = await Invoice.findById(entityId).select('workOrder customer property');
       if (!inv) throw new Error('Invoice not found');
       refs.invoice = entityId;
       refs.workOrder = inv.workOrder;
-      refs.vehicle = inv.vehicle;
+      refs.property = inv.property;
       refs.customer = inv.customer;
       break;
     }
 
     case 'appointment': {
-      const appt = await Appointment.findById(entityId).select('workOrder customer vehicle');
+      const appt = await Appointment.findById(entityId).select('workOrder customer property');
       if (!appt) throw new Error('Appointment not found');
       refs.appointment = entityId;
       refs.workOrder = appt.workOrder;
-      refs.vehicle = appt.vehicle;
+      refs.property = appt.property;
       refs.customer = appt.customer;
       break;
     }
@@ -65,8 +65,8 @@ const resolveHierarchy = async (entityType, entityId) => {
 const populateFollowUp = (query) => {
   return query
     .populate('customer', 'name phone email')
-    .populate('vehicle', 'year make model')
-    .populate('workOrder', 'status serviceRequested services date')
+    .populate('property', 'address propertyType')
+    .populate('workOrder', 'status services date')
     .populate('appointment', 'startTime endTime serviceType')
     .populate('invoice', 'invoiceNumber')
     .populate('createdBy', 'name')
@@ -81,7 +81,7 @@ exports.getDashboardFollowUps = catchAsync(async (req, res, next) => {
 
   const openFollowUps = await FollowUp.find({ status: 'open' })
     .populate('customer', 'name phone')
-    .populate('vehicle', 'year make model')
+    .populate('property', 'address propertyType')
     .populate('workOrder', 'status')
     .lean();
 
@@ -95,7 +95,6 @@ exports.getDashboardFollowUps = catchAsync(async (req, res, next) => {
     const bPri = PRIORITY_WEIGHT[b.priority] || 2;
     if (bPri !== aPri) return bPri - aPri;
 
-    // dueDate ascending, nulls last
     if (a.dueDate && b.dueDate) {
       if (a.dueDate.getTime() !== b.dueDate.getTime()) return a.dueDate - b.dueDate;
     } else if (a.dueDate && !b.dueDate) {
@@ -127,7 +126,7 @@ exports.getEntityFollowUps = catchAsync(async (req, res, next) => {
 
   const fieldMap = {
     customer: 'customer',
-    vehicle: 'vehicle',
+    property: 'property',
     workOrder: 'workOrder',
     quote: 'workOrder',
     invoice: 'invoice',
@@ -154,13 +153,13 @@ exports.getEntityFollowUps = catchAsync(async (req, res, next) => {
 
 // GET / - list with filters
 exports.getFollowUps = catchAsync(async (req, res, next) => {
-  const { status, entityType, customer, vehicle, workOrder } = req.query;
+  const { status, entityType, customer, property, workOrder } = req.query;
   const filter = {};
 
   if (status) filter.status = status;
   if (entityType) filter.entityType = entityType;
   if (customer) filter.customer = customer;
-  if (vehicle) filter.vehicle = vehicle;
+  if (property) filter.property = property;
   if (workOrder) filter.workOrder = workOrder;
 
   const followUps = await populateFollowUp(

@@ -33,7 +33,7 @@ exports.createMedia = catchAsync(async (req, res, next) => {
   // Create media record
   const newMedia = await Media.create({
     workOrder: req.body.workOrder,
-    vehicle: req.body.vehicle,
+    property: req.body.property,
     customer: req.body.customer,
     type: req.body.type,
     fileUrl: uploadResult.fileUrl,
@@ -55,13 +55,13 @@ exports.createMedia = catchAsync(async (req, res, next) => {
 
 // Get all media
 exports.getAllMedia = catchAsync(async (req, res, next) => {
-  const { workOrder, vehicle, customer, type } = req.query;
-  
+  const { workOrder, property, customer, type } = req.query;
+
   // Build query based on filters
   const query = {};
-  
+
   if (workOrder) query.workOrder = workOrder;
-  if (vehicle) query.vehicle = vehicle;
+  if (property) query.property = property;
   if (customer) query.customer = customer;
   if (type) query.type = type;
   
@@ -268,12 +268,11 @@ exports.shareMediaViaEmail = catchAsync(async (req, res, next) => {
   await media.save();
   
   // Send the email
-  // Note: In a real application, you would need to fetch the customer and vehicle details
+  // Note: In a real application, you would need to fetch the customer and property details
   // Here we're just using placeholder data
   await emailService.shareMedia(
     media,
     { name: 'Customer' }, // This should be the actual customer
-    { year: '2023', make: 'Unknown', model: 'Unknown' }, // This should be the actual vehicle
     sharingLink
   );
   

@@ -55,7 +55,7 @@ const Register = () => {
             Create New Account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Register for Auto Repair Shop CRM
+            Register for Snyder's Gutters CRM
           </p>
         </div>
         

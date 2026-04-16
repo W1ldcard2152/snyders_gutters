@@ -30,9 +30,9 @@ const FollowUpSchema = new Schema({
     ref: 'Customer',
     index: true
   },
-  vehicle: {
+  property: {
     type: Schema.Types.ObjectId,
-    ref: 'Vehicle',
+    ref: 'Property',
     index: true
   },
   workOrder: {
@@ -52,7 +52,7 @@ const FollowUpSchema = new Schema({
   // The level at which this follow-up was created
   entityType: {
     type: String,
-    enum: ['customer', 'vehicle', 'workOrder', 'appointment', 'invoice', 'quote'],
+    enum: ['customer', 'property', 'workOrder', 'appointment', 'invoice', 'quote'],
     required: [true, 'Entity type is required']
   },
 

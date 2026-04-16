@@ -11,7 +11,7 @@ const Dashboard = () => {
       <div className="mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-600">Welcome to the Auto Repair Shop CRM</p>
+          <p className="text-gray-600">Welcome to Snyder's Gutters CRM</p>
         </div>
       </div>
 

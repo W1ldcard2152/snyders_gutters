@@ -1,5 +1,5 @@
 const Customer = require('../models/Customer');
-const Vehicle = require('../models/Vehicle');
+const Property = require('../models/Property');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const cacheService = require('../services/cacheService');
@@ -44,7 +44,7 @@ exports.getCustomer = catchAsync(async (req, res, next) => {
     return res.status(200).json(cached);
   }
 
-  const customer = await Customer.findById(req.params.id).populate('vehicles');
+  const customer = await Customer.findById(req.params.id).populate('properties');
 
   if (!customer) {
     return next(new AppError('No customer found with that ID', 404));
@@ -148,13 +148,13 @@ exports.deleteCustomer = catchAsync(async (req, res, next) => {
     return next(new AppError('No customer found with that ID', 404));
   }
 
-  // Check if customer has any vehicles
-  const vehicleCount = await Vehicle.countDocuments({ customer: req.params.id });
+  // Check if customer has any properties
+  const propertyCount = await Property.countDocuments({ customer: req.params.id });
 
-  if (vehicleCount > 0) {
+  if (propertyCount > 0) {
     return next(
       new AppError(
-        'This customer has associated vehicles. Please delete or reassign them first.',
+        'This customer has associated properties. Please delete or reassign them first.',
         400
       )
     );
@@ -251,21 +251,21 @@ exports.checkExistingCustomerByPhone = catchAsync(async (req, res, next) => {
   });
 });
 
-// Get customer vehicles
-exports.getCustomerVehicles = catchAsync(async (req, res, next) => {
+// Get customer properties
+exports.getCustomerProperties = catchAsync(async (req, res, next) => {
   const customer = await Customer.findById(req.params.id);
 
   if (!customer) {
     return next(new AppError('No customer found with that ID', 404));
   }
 
-  const vehicles = await Vehicle.find({ customer: req.params.id });
+  const properties = await Property.find({ customer: req.params.id });
 
   res.status(200).json({
     status: 'success',
-    results: vehicles.length,
+    results: properties.length,
     data: {
-      vehicles
+      properties
     }
   });
 });

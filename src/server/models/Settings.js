@@ -1,61 +1,47 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const defaultVendorHostnames = [
-  { hostname: 'walmart.com', vendor: 'Walmart' },
-  { hostname: 'tractorsupply.com', vendor: 'Tractor Supply' },
-  { hostname: 'advanceautoparts.com', vendor: 'Advance Auto Parts' },
-  { hostname: 'autozone.com', vendor: 'Autozone' },
-  { hostname: 'napaonline.com', vendor: 'Napa Auto Parts' },
-  { hostname: 'rockauto.com', vendor: 'Rock Auto' },
-  { hostname: 'ebay.com', vendor: 'eBay.com' },
-  { hostname: 'amazon.com', vendor: 'Amazon.com' },
-  { hostname: 'ecstuning.com', vendor: 'ECS Tuning' },
-  { hostname: 'fcpeuro.com', vendor: 'FCP Euro' }
-];
-
 const SettingsSchema = new Schema(
   {
-    partMarkupPercentage: {
+    supplyMarkupPercentage: {
       type: Number,
-      default: 30,
+      default: 20,
       min: 0
     },
     customVendors: {
       type: [String],
       default: [
-        'Walmart', 'Tractor Supply', 'Advance Auto Parts', 'Autozone',
-        'Napa Auto Parts', 'Rock Auto', 'eBay.com', 'Amazon.com',
-        'ECS Tuning', 'FCP Euro'
+        'Home Depot', 'Menards', "Lowe's", 'Grainger',
+        'Amazon', 'SiteOne', 'Regional Gutter Supply'
       ]
     },
     customCategories: {
       type: [String],
       default: [
-        'Maintenance', 'Repair', 'Fluid', 'Software/License'
+        'Gutter Cleaning', 'Pressure Washing', 'Gutter Guard Install',
+        'Repair', 'Maintenance'
       ]
     },
     taskCategories: {
       type: [String],
       default: [
-        'Training', 'Meeting', 'Break', 'Admin', 'Logistics'
+        'Equipment Maintenance', 'Drive Time', 'Material Pickup',
+        'Training', 'Admin', 'Meeting'
       ]
     },
     inventoryCategories: {
       type: [String],
       default: [
-        'Fluids', 'PPE', 'Consumables', 'Filters', 'Hardware'
+        'Gutter Guards', 'Downspout Hardware', 'Fasteners & Sealants',
+        'Cleaning Supplies', 'Pressure Wash Equipment', 'Miscellaneous'
       ]
     },
     packageTags: {
       type: [String],
       default: [
-        'Motor Oil', 'Oil Filter', 'Transmission Fluid', 'Brake Fluid', 'Coolant', 'Power Steering Fluid'
+        'Cleaning Solution', 'Micro Guard', 'Gutter Spike',
+        'Downspout Extension', 'Splash Block', 'End Cap'
       ]
-    },
-    vendorHostnames: {
-      type: [{ hostname: String, vendor: String }],
-      default: () => [...defaultVendorHostnames]
     },
     showServiceAdvisorOnInvoice: {
       type: Boolean,
@@ -67,7 +53,7 @@ const SettingsSchema = new Schema(
   }
 );
 
-// Singleton pattern - always returns the single settings document
+// Singleton pattern — always returns the single settings document
 SettingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne();
   if (!settings) {
@@ -77,34 +63,37 @@ SettingsSchema.statics.getSettings = async function () {
     let needsSave = false;
     if (!settings.customVendors || settings.customVendors.length === 0) {
       settings.customVendors = [
-        'Walmart', 'Tractor Supply', 'Advance Auto Parts', 'Autozone',
-        'Napa Auto Parts', 'Rock Auto', 'eBay.com', 'Amazon.com',
-        'ECS Tuning', 'FCP Euro'
+        'Home Depot', 'Menards', "Lowe's", 'Grainger',
+        'Amazon', 'SiteOne', 'Regional Gutter Supply'
       ];
       needsSave = true;
     }
     if (!settings.customCategories || settings.customCategories.length === 0) {
       settings.customCategories = [
-        'Maintenance', 'Repair', 'Fluid', 'Software/License'
+        'Gutter Cleaning', 'Pressure Washing', 'Gutter Guard Install',
+        'Repair', 'Maintenance'
       ];
       needsSave = true;
     }
     if (!settings.taskCategories || settings.taskCategories.length === 0) {
       settings.taskCategories = [
-        'Training', 'Meeting', 'Break', 'Admin', 'Logistics'
+        'Equipment Maintenance', 'Drive Time', 'Material Pickup',
+        'Training', 'Admin', 'Meeting'
       ];
       needsSave = true;
     }
     if (!settings.inventoryCategories || settings.inventoryCategories.length === 0) {
-      settings.inventoryCategories = ['Fluids', 'PPE', 'Consumables', 'Filters', 'Hardware'];
+      settings.inventoryCategories = [
+        'Gutter Guards', 'Downspout Hardware', 'Fasteners & Sealants',
+        'Cleaning Supplies', 'Pressure Wash Equipment', 'Miscellaneous'
+      ];
       needsSave = true;
     }
     if (!settings.packageTags || settings.packageTags.length === 0) {
-      settings.packageTags = ['Motor Oil', 'Oil Filter', 'Transmission Fluid', 'Brake Fluid', 'Coolant', 'Power Steering Fluid'];
-      needsSave = true;
-    }
-    if (!settings.vendorHostnames || settings.vendorHostnames.length === 0) {
-      settings.vendorHostnames = [...defaultVendorHostnames];
+      settings.packageTags = [
+        'Cleaning Solution', 'Micro Guard', 'Gutter Spike',
+        'Downspout Extension', 'Splash Block', 'End Cap'
+      ];
       needsSave = true;
     }
     if (needsSave) await settings.save();

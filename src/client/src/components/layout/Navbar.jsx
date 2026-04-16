@@ -48,11 +48,7 @@ const Navbar = ({ onMobileMenuToggle }) => {
             {/* Logo */}
             <div className="flex-shrink-0">
               <Link to="/" className="text-xl font-bold text-primary-600">
-                <img
-                  src="/phxBanner.svg"
-                  alt="Phoenix Automotive Group Banner"
-                  className="h-8 sm:h-12 lg:h-14"
-                />
+                Snyder's Gutters
               </Link>
             </div>
 

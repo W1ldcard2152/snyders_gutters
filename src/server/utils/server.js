@@ -29,21 +29,21 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // Import routes
 const customerRoutes = require('../routes/customerRoutes');
-const vehicleRoutes = require('../routes/vehicleRoutes');
+const propertyRoutes = require('../routes/propertyRoutes');
 const workOrderRoutes = require('../routes/workOrderRoutes');
 const appointmentRoutes = require('../routes/appointmentRoutes');
 const mediaRoutes = require('../routes/mediaRoutes');
 
 // Use routes
 app.use('/api/customers', customerRoutes);
-app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/properties', propertyRoutes);
 app.use('/api/workorders', workOrderRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/media', mediaRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
-  res.send('Auto Repair CRM API is running');
+  res.send("Snyder's Gutters CRM API is running");
 });
 
 // Error handling middleware

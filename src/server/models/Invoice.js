@@ -30,7 +30,7 @@ const PaymentSchema = new Schema({
 const InvoiceItemSchema = new Schema({
   type: {
     type: String,
-    enum: ['Part', 'Labor', 'Service'],
+    enum: ['Supply', 'Labor', 'Service'],
     required: true
   },
   description: {
@@ -66,14 +66,6 @@ const InvoiceItemSchema = new Schema({
   warranty: {
     type: String,
     trim: true
-  },
-  coreCharge: {
-    type: Number,
-    default: 0
-  },
-  coreChargeInvoiceable: {
-    type: Boolean,
-    default: false
   }
 });
 
@@ -91,9 +83,9 @@ const InvoiceSchema = new Schema(
       ref: 'Customer',
       required: true
     },
-    vehicle: {
+    property: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
+      ref: 'Property',
       required: true
     },
     workOrder: {
@@ -163,7 +155,7 @@ const InvoiceSchema = new Schema(
 
 // Indexes for faster queries
 InvoiceSchema.index({ customer: 1 });
-InvoiceSchema.index({ vehicle: 1 });
+InvoiceSchema.index({ property: 1 });
 InvoiceSchema.index({ workOrder: 1 });
 InvoiceSchema.index({ status: 1 });
 InvoiceSchema.index({ invoiceDate: 1 });

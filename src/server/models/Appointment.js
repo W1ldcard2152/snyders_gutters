@@ -8,10 +8,10 @@ const AppointmentSchema = new Schema(
       ref: 'Customer',
       required: true
     },
-    vehicle: {
+    property: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
-      required: false // Changed to false to allow appointments without a vehicle
+      ref: 'Property',
+      required: false
     },
     serviceType: {
       type: String,
@@ -78,7 +78,7 @@ const AppointmentSchema = new Schema(
 // Indexes for faster queries
 AppointmentSchema.index({ startTime: 1, endTime: 1 });
 AppointmentSchema.index({ customer: 1 });
-AppointmentSchema.index({ vehicle: 1 });
+AppointmentSchema.index({ property: 1 });
 AppointmentSchema.index({ status: 1 });
 // Technician index might need to be re-evaluated or removed if not frequently queried directly
 // AppointmentSchema.index({ technician: 1 }); 
@@ -128,19 +128,14 @@ AppointmentSchema.methods.createWorkOrder = async function() {
   
   // Explicitly create and assign fields to the new WorkOrder instance
   const newWorkOrder = new WorkOrder();
-  newWorkOrder.vehicle = this.vehicle;
+  newWorkOrder.property = this.property;
   newWorkOrder.customer = this.customer;
-  newWorkOrder.date = this.startTime; // Or Date.now() if preferred for WO creation date
-  
-  // Handle services based on serviceType
-  // Assuming serviceType is a string description for a single service
+  newWorkOrder.date = this.startTime;
+
   newWorkOrder.services = [{ description: this.serviceType }];
-  // For backward compatibility, also set serviceRequested
-  newWorkOrder.serviceRequested = this.serviceType; 
-  
-  newWorkOrder.status = 'Appointment Scheduled'; // Default status for WO created from an appointment
-  newWorkOrder.appointmentId = this._id; // Link this appointment to the work order (backward compatibility)
-  newWorkOrder.appointments = [this._id]; // Add to appointments array for one-to-many relationship
+
+  newWorkOrder.status = 'Appointment Scheduled';
+  newWorkOrder.appointments = [this._id];
 
   if (this.technician) {
     newWorkOrder.assignedTechnician = this.technician; // Assign technician from appointment

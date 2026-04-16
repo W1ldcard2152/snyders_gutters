@@ -1,18 +1,14 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-// Sub-schemas
-const PartSchema = new Schema({
+// Material Schema (replaces PartSchema — auto-specific fields removed)
+const MaterialSchema = new Schema({
   name: {
     type: String,
     required: true,
     trim: true
   },
-  partNumber: {
-    type: String,
-    trim: true
-  },
-  itemNumber: { // Vendor SKU/Item number
+  partNumber: { // Supplier SKU
     type: String,
     trim: true
   },
@@ -32,39 +28,15 @@ const PartSchema = new Schema({
     min: 0,
     default: 0
   },
-  ordered: {
-    type: Boolean,
-    default: false
-  },
-  received: {
-    type: Boolean,
-    default: false
-  },
-  vendor: { // Or purchaseLocation (marketplace/retailer)
+  vendor: {
     type: String,
     trim: true
   },
-  supplier: { // Actual seller on marketplace (e.g., specific eBay seller)
+  notes: { // Internal notes — NOT shown on invoice
     type: String,
     trim: true
   },
-  purchaseOrderNumber: { // Or orderNumber
-    type: String,
-    trim: true
-  },
-  receiptImageUrl: { // Link to receipt in S3
-    type: String,
-    trim: true
-  },
-  url: { // Product URL
-    type: String,
-    trim: true
-  },
-  notes: { // Internal notes - NOT shown on invoice
-    type: String,
-    trim: true
-  },
-  warranty: { // Part warranty info - customer-facing
+  warranty: { // Customer-facing warranty info
     type: String,
     trim: true
   },
@@ -73,30 +45,9 @@ const PartSchema = new Schema({
     trim: true,
     default: ''
   },
-  coreCharge: {
-    type: Number,
-    min: 0,
-    default: 0
-  },
-  coreChargeInvoiceable: {
-    type: Boolean,
-    default: false
-  },
-  vin: { // VIN of source vehicle (for used parts)
-    type: String,
-    trim: true
-  },
-  stockNumber: { // Stock number of source vehicle (for used parts)
-    type: String,
-    trim: true
-  },
-  inventoryItemId: { // Link to inventory item this part was pulled from
+  inventoryItemId: { // Link to inventory item this material was pulled from
     type: Schema.Types.ObjectId,
     ref: 'InventoryItem'
-  },
-  serviceIncluded: { // Part included in a service package ($0 price)
-    type: Boolean,
-    default: false
   }
 });
 
@@ -121,7 +72,7 @@ const LaborSchema = new Schema({
     required: true,
     min: 0
   },
-  // Legacy field - kept for backward compatibility, maps to quantity for hourly items
+  // Legacy field — kept for backward compatibility, maps to quantity for hourly items
   hours: {
     type: Number,
     min: 0
@@ -152,7 +103,7 @@ const ServicePackageLineSchema = new Schema({
 const MediaSchema = new Schema({
   type: {
     type: String,
-    enum: ['Pre-Inspection', 'Diagnostic', 'Parts Receipt', 'Post-Inspection', 'Other'],
+    enum: ['Pre-Service', 'In-Progress', 'Post-Service', 'Other'],
     required: true
   },
   fileUrl: {
@@ -173,7 +124,7 @@ const MediaSchema = new Schema({
   }
 });
 
-// Service Schema (new addition)
+// Service Schema — describes work requested
 const ServiceSchema = new Schema({
   description: {
     type: String,
@@ -182,144 +133,18 @@ const ServiceSchema = new Schema({
   }
 });
 
-// Checklist Item Schema - for tracking individual checklist items
-const ChecklistItemSchema = new Schema({
-  completed: {
-    type: Boolean,
-    default: false
-  },
-  completedAt: {
-    type: Date
-  },
-  value: {
-    type: String,
-    trim: true
-  },
-  notes: {
-    type: String,
-    trim: true
-  },
-  syncedFromInspection: {
-    type: Boolean,
-    default: false
-  }
-}, { _id: false });
-
-// Inspection Checklist Schema
-const InspectionChecklistSchema = new Schema({
-  // Pre-Inspection Setup
-  mileage: ChecklistItemSchema,
-  startVehicle: ChecklistItemSchema,
-  runningVoltage: ChecklistItemSchema,
-  keyOffVoltage: ChecklistItemSchema,
-  preInspectionSmartScan: ChecklistItemSchema,
-
-  // Physical Inspection
-  leaksUnderVehicle: ChecklistItemSchema,
-  tiresFront: ChecklistItemSchema,
-  tiresRear: ChecklistItemSchema,
-  brakesFront: ChecklistItemSchema,
-  brakesRear: ChecklistItemSchema,
-  engineOil: ChecklistItemSchema,
-  brakeFluid: ChecklistItemSchema,
-  coolant: ChecklistItemSchema,
-  ballJoints: ChecklistItemSchema,
-  tieRodEnds: ChecklistItemSchema,
-  axleShafts: ChecklistItemSchema,
-  shocksStruts: ChecklistItemSchema,
-  wheelBearings: ChecklistItemSchema,
-  controlArmBushings: ChecklistItemSchema,
-  swayBarEndLinks: ChecklistItemSchema,
-  accessoryBelt: ChecklistItemSchema,
-  exhaust: ChecklistItemSchema,
-
-  // Documentation
-  preScanUploaded: ChecklistItemSchema,
-  inspectionNotes: ChecklistItemSchema,
-
-  lastModified: {
-    type: Date,
-    default: Date.now
-  }
-}, { _id: false });
-
-// Repair Checklist Schema
-const RepairChecklistSchema = new Schema({
-  // Pre-Repair Setup
-  getKeys: ChecklistItemSchema,
-  mileage: ChecklistItemSchema,
-  startVehicle: ChecklistItemSchema,
-  runningVoltage: ChecklistItemSchema,
-  preRepairSmartScan: ChecklistItemSchema,
-  testDrive: ChecklistItemSchema,
-  driveIntoBay: ChecklistItemSchema,
-  keyOffVoltage: ChecklistItemSchema,
-  liftVehicle: ChecklistItemSchema,
-  positionTools: ChecklistItemSchema,
-
-  // Physical Pre-Inspection (same items as inspection)
-  leaksUnderVehicle: ChecklistItemSchema,
-  tiresFront: ChecklistItemSchema,
-  tiresRear: ChecklistItemSchema,
-  brakesFront: ChecklistItemSchema,
-  brakesRear: ChecklistItemSchema,
-  engineOil: ChecklistItemSchema,
-  brakeFluid: ChecklistItemSchema,
-  coolant: ChecklistItemSchema,
-  ballJoints: ChecklistItemSchema,
-  tieRodEnds: ChecklistItemSchema,
-  axleShafts: ChecklistItemSchema,
-  shocksStruts: ChecklistItemSchema,
-  wheelBearings: ChecklistItemSchema,
-  controlArmBushings: ChecklistItemSchema,
-  swayBarEndLinks: ChecklistItemSchema,
-  accessoryBelt: ChecklistItemSchema,
-  exhaust: ChecklistItemSchema,
-
-  // Repair Work
-  repairComplete: ChecklistItemSchema,
-
-  // Post-Repair Checklist
-  checkUnderVehicle: ChecklistItemSchema,
-  checkSuspensionBolts: ChecklistItemSchema,
-  lowerVehicle: ChecklistItemSchema,
-  torqueLugNuts: ChecklistItemSchema,
-  checkInteriorUnderHood: ChecklistItemSchema,
-  verifyRepair: ChecklistItemSchema,
-  moduleReset: ChecklistItemSchema,
-  postRepairSmartScan: ChecklistItemSchema,
-  postRepairTestDrive: ChecklistItemSchema,
-  parkVehicle: ChecklistItemSchema,
-
-  // Documentation
-  preScanUploaded: ChecklistItemSchema,
-  postScanUploaded: ChecklistItemSchema,
-  voltageRecorded: ChecklistItemSchema,
-  mileageRecorded: ChecklistItemSchema,
-  postRepairNotes: ChecklistItemSchema,
-
-  lastModified: {
-    type: Date,
-    default: Date.now
-  }
-}, { _id: false });
-
 // Main WorkOrder Schema
 const WorkOrderSchema = new Schema(
   {
-    vehicle: {
+    property: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
+      ref: 'Property',
       required: false
     },
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',
       required: true
-    },
-    currentMileage: { // Added currentMileage
-      type: Number,
-      min: 0
     },
     date: {
       type: Date,
@@ -336,14 +161,9 @@ const WorkOrderSchema = new Schema(
         'Quote',
         'Work Order Created',
         'Appointment Scheduled',
-        'Appointment Complete',
-        'Inspection In Progress',
-        'Inspection/Diag Complete',
-        'Parts Ordered',
-        'Parts Received',
-        'Repair In Progress',
-        'Repair Complete - Awaiting Payment',
-        'Repair Complete - Invoiced',
+        'In Progress',
+        'Complete',
+        'Invoiced',
         'On Hold',
         'No-Show',
         'Cancelled',
@@ -358,39 +178,30 @@ const WorkOrderSchema = new Schema(
     holdReason: {
       type: String,
       enum: [
-        'Waiting for Parts',
-        'Waiting for Customer Approval',
-        'Waiting for Insurance',
-        'Customer Requested Delay',
-        'Shop Capacity',
-        'Backordered Parts',
-        'Vehicle Storage',
-        'Other'
-      ],
+        'weather-delay',
+        'customer-request',
+        'access-issue',
+        'equipment-issue',
+        'other'
+      ]
     },
     holdReasonOther: {
       type: String,
       trim: true
     },
-    // Replace single serviceRequested with services array
     services: [ServiceSchema],
-    // Keep serviceRequested for backward compatibility
-    serviceRequested: {
+    serviceNotes: {
       type: String,
       trim: true
     },
-    diagnosticNotes: {
+    completionNotes: {
       type: String,
       trim: true
     },
-    parts: [PartSchema],
+    materials: [MaterialSchema],
     labor: [LaborSchema],
     servicePackages: [ServicePackageLineSchema],
     media: [MediaSchema],
-    partsSortConfig: [{
-      column: { type: String },
-      direction: { type: String, enum: ['asc', 'desc'] }
-    }],
     totalEstimate: {
       type: Number,
       min: 0,
@@ -401,12 +212,6 @@ const WorkOrderSchema = new Schema(
       min: 0,
       default: 0
     },
-    appointmentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Appointment'
-    },
-    // New appointments array for one-to-many relationship
-    // Kept appointmentId above for backward compatibility
     appointments: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Appointment'
@@ -422,14 +227,7 @@ const WorkOrderSchema = new Schema(
     invoice: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Invoice'
-    },
-    skipDiagnostics: {
-      type: Boolean,
-      default: false
-    },
-    // Checklists for technician workflow
-    inspectionChecklist: InspectionChecklistSchema,
-    repairChecklist: RepairChecklistSchema
+    }
   },
   {
     timestamps: true
@@ -437,15 +235,15 @@ const WorkOrderSchema = new Schema(
 );
 
 // Indexes for faster queries
-WorkOrderSchema.index({ vehicle: 1 });
+WorkOrderSchema.index({ property: 1 });
 WorkOrderSchema.index({ customer: 1 });
 WorkOrderSchema.index({ status: 1 });
 WorkOrderSchema.index({ date: 1 });
 
-// Virtual for parts cost calculation
-WorkOrderSchema.virtual('partsCost').get(function() {
-  return this.parts.reduce((total, part) => {
-    return total + (part.price * part.quantity);
+// Virtual for materials cost calculation
+WorkOrderSchema.virtual('materialsCost').get(function() {
+  return this.materials.reduce((total, material) => {
+    return total + (material.price * material.quantity);
   }, 0);
 });
 
@@ -464,12 +262,11 @@ WorkOrderSchema.virtual('servicePackagesCost').get(function() {
 
 // Virtual for total cost calculation
 WorkOrderSchema.virtual('totalCost').get(function() {
-  return this.partsCost + this.laborCost + this.servicePackagesCost;
+  return this.materialsCost + this.laborCost + this.servicePackagesCost;
 });
 
-// Pre-validate hook: migrate legacy data before validation runs
+// Pre-validate hook: migrate legacy labor data before validation runs
 WorkOrderSchema.pre('validate', function(next) {
-  // Migrate legacy labor: backfill quantity from hours if missing
   if (this.labor && this.labor.length > 0) {
     this.labor.forEach(item => {
       if (item.quantity == null && item.hours != null) {
@@ -480,34 +277,17 @@ WorkOrderSchema.pre('validate', function(next) {
   next();
 });
 
-// Middleware to handle backward compatibility and status change tracking
+// Pre-save: track status change timestamp
 WorkOrderSchema.pre('save', function(next) {
-  // Track when status changes for age-based dashboard indicators
   if (this.isModified('status')) {
     this.statusChangedAt = new Date();
   }
-
-  // If serviceRequested exists but services is empty, migrate it
-  if (this.serviceRequested && (!this.services || this.services.length === 0)) {
-    this.services = [{ description: this.serviceRequested }];
-  }
-
-  // If services exists, update serviceRequested for backward compatibility
-  if (this.services && this.services.length > 0) {
-    // Join all service descriptions with linebreaks for display in single field
-    this.serviceRequested = this.services.map(service => service.description).join('\n');
-  }
-
   next();
 });
 
-// Method to update status and track status history
+// Method to update status
 WorkOrderSchema.methods.updateStatus = function(newStatus, notes = '') {
   this.status = newStatus;
-  
-  // You could add status history tracking here if needed
-  // this.statusHistory.push({ status: newStatus, date: new Date(), notes });
-  
   return this.save();
 };
 

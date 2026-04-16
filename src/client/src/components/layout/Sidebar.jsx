@@ -123,7 +123,7 @@ const Sidebar = () => {
               {/* Header with close button */}
               <div className="flex items-center justify-between p-4 border-b border-primary-700">
                 <div className="flex items-center">
-                  <img src="/phxBanner.svg" alt="Phoenix CRM" className="h-8" />
+                  <span className="text-white font-bold text-lg">Snyder's Gutters</span>
                 </div>
                 <button
                   onClick={() => setMobileMenuOpen(false)}

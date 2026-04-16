@@ -48,19 +48,19 @@ const validateMultipleEntities = async (validations) => {
 };
 
 /**
- * Validate vehicle belongs to customer
- * @param {Object} vehicle - Vehicle document
+ * Validate property belongs to customer
+ * @param {Object} property - Property document
  * @param {Object} customer - Customer document
- * @throws {AppError} If vehicle doesn't belong to customer
+ * @throws {AppError} If property doesn't belong to customer
  */
-const validateVehicleOwnership = (vehicle, customer) => {
-  if (vehicle.customer.toString() !== customer._id.toString()) {
-    throw new AppError('The vehicle does not belong to this customer', 400);
+const validatePropertyOwnership = (property, customer) => {
+  if (property.customer.toString() !== customer._id.toString()) {
+    throw new AppError('The property does not belong to this customer', 400);
   }
 };
 
 module.exports = {
   validateEntityExists,
   validateMultipleEntities,
-  validateVehicleOwnership
+  validatePropertyOwnership
 };

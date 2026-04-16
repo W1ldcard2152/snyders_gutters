@@ -1,5 +1,5 @@
 const Customer = require('../models/Customer');
-const Vehicle = require('../models/Vehicle');
+const Property = require('../models/Property');
 const WorkOrder = require('../models/WorkOrder');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
@@ -58,89 +58,60 @@ const globalSearch = catchAsync(async (req, res, next) => {
       });
     });
 
-    // Search vehicles
-    // For multi-word queries (e.g., "GMC Acadia"), try to match across make/model fields
-    // Split on whitespace and escape each part for safe regex use
-    const queryParts = rawQuery.split(/\s+/).filter(part => part.length > 0).map(escapeRegex);
-
-    let vehicleSearchConditions = [
-      { make: { $regex: query, $options: 'i' } },
-      { model: { $regex: query, $options: 'i' } },
-      { year: isNaN(parseInt(rawQuery)) ? null : parseInt(rawQuery) },
-      { vin: { $regex: query, $options: 'i' } },
-      { licensePlate: { $regex: query, $options: 'i' } },
-      { licensePlateState: { $regex: query, $options: 'i' } },
-      { notes: { $regex: query, $options: 'i' } }
-    ].filter(condition => condition !== null);
-
-    // If query has multiple words, also search for combinations across make/model
-    if (queryParts.length > 1) {
-      // Try to match first part to make and remaining parts to model
-      const firstPart = queryParts[0];
-      const remainingParts = queryParts.slice(1).join(' ');
-
-      vehicleSearchConditions.push({
-        $and: [
-          { make: { $regex: firstPart, $options: 'i' } },
-          { model: { $regex: remainingParts, $options: 'i' } }
-        ]
-      });
-
-      // Also try matching any individual word to make or model
-      queryParts.forEach(part => {
-        if (part.length > 1) {
-          vehicleSearchConditions.push(
-            { make: { $regex: part, $options: 'i' } },
-            { model: { $regex: part, $options: 'i' } }
-          );
-        }
-      });
-    }
-
-    const vehicles = await Vehicle.find({
-      $or: vehicleSearchConditions
+    // Search properties
+    const properties = await Property.find({
+      $or: [
+        { 'address.street': { $regex: query, $options: 'i' } },
+        { 'address.city': { $regex: query, $options: 'i' } },
+        { 'address.state': { $regex: query, $options: 'i' } },
+        { 'address.zip': { $regex: query, $options: 'i' } },
+        { notes: { $regex: query, $options: 'i' } }
+      ]
     })
     .populate('customer', 'name phone')
     .limit(10);
 
-    vehicles.forEach(vehicle => {
+    properties.forEach(property => {
+      const addressStr = property.address
+        ? [property.address.street, property.address.city, property.address.state].filter(Boolean).join(', ')
+        : 'No address';
       results.push({
-        type: 'vehicle',
-        id: vehicle._id,
-        title: vehicle.displayName,
-        subtitle: vehicle.customer ? `Owner: ${vehicle.customer.name}` : 'Unknown Owner',
-        description: `${vehicle.vin ? `VIN: ${vehicle.vin}` : ''} ${vehicle.licensePlate ? `License: ${vehicle.licensePlate}` : ''}`.trim()
+        type: 'property',
+        id: property._id,
+        title: addressStr,
+        subtitle: property.customer ? `Owner: ${property.customer.name}` : 'Unknown Owner',
+        description: `${property.propertyType || 'residential'} — ${property.address?.zip || ''}`
       });
     });
 
     // Search work orders
     const workOrders = await WorkOrder.find({
       $or: [
-        { serviceRequested: { $regex: query, $options: 'i' } },
-        { diagnosticNotes: { $regex: query, $options: 'i' } },
+        { serviceNotes: { $regex: query, $options: 'i' } },
+        { completionNotes: { $regex: query, $options: 'i' } },
         { status: { $regex: query, $options: 'i' } },
         { 'services.description': { $regex: query, $options: 'i' } },
-        { 'parts.name': { $regex: query, $options: 'i' } },
-        { 'parts.partNumber': { $regex: query, $options: 'i' } },
+        { 'materials.name': { $regex: query, $options: 'i' } },
+        { 'materials.partNumber': { $regex: query, $options: 'i' } },
         { 'labor.description': { $regex: query, $options: 'i' } }
       ]
     })
     .populate('customer', 'name phone')
-    .populate('vehicle', 'year make model')
+    .populate('property', 'address propertyType')
     .sort({ createdAt: -1 })
     .limit(10);
 
     workOrders.forEach(workOrder => {
-      const vehicleInfo = workOrder.vehicle 
-        ? `${workOrder.vehicle.year} ${workOrder.vehicle.make} ${workOrder.vehicle.model}`
-        : 'No vehicle';
-      
+      const propertyInfo = workOrder.property && workOrder.property.address
+        ? [workOrder.property.address.street, workOrder.property.address.city].filter(Boolean).join(', ')
+        : 'No property';
+
       results.push({
         type: 'workorder',
         id: workOrder._id,
         title: `Work Order - ${workOrder.customer ? workOrder.customer.name : 'Unknown Customer'}`,
-        subtitle: vehicleInfo,
-        description: workOrder.serviceRequested || 'No service description'
+        subtitle: propertyInfo,
+        description: workOrder.serviceNotes || (workOrder.services && workOrder.services[0]?.description) || 'No service description'
       });
     });
 
@@ -156,21 +127,20 @@ const globalSearch = catchAsync(async (req, res, next) => {
         }
       })
       .populate('customer', 'name phone')
-      .populate('vehicle', 'year make model')
+      .populate('property', 'address propertyType')
       .limit(5);
 
       workOrdersByDate.forEach(workOrder => {
-        // Avoid duplicates
         if (!results.some(r => r.type === 'workorder' && r.id === workOrder._id.toString())) {
-          const vehicleInfo = workOrder.vehicle 
-            ? `${workOrder.vehicle.year} ${workOrder.vehicle.make} ${workOrder.vehicle.model}`
-            : 'No vehicle';
-          
+          const propertyInfo = workOrder.property && workOrder.property.address
+            ? [workOrder.property.address.street, workOrder.property.address.city].filter(Boolean).join(', ')
+            : 'No property';
+
           results.push({
             type: 'workorder',
             id: workOrder._id,
             title: `Work Order - ${workOrder.customer ? workOrder.customer.name : 'Unknown Customer'}`,
-            subtitle: vehicleInfo,
+            subtitle: propertyInfo,
             description: `Created: ${formatDate(workOrder.createdAt)}`
           });
         }
@@ -180,13 +150,11 @@ const globalSearch = catchAsync(async (req, res, next) => {
     // If query looks like a phone number, prioritize phone matches
     const phoneRegex = /[\d\-\(\)\s\+]+/;
     if (phoneRegex.test(rawQuery) && rawQuery.length > 6) {
-      // Extract only digits for phone search (safe, no special chars)
       const phoneDigits = rawQuery.replace(/\D/g, '');
       const phoneMatches = await Customer.find({
         phone: { $regex: phoneDigits, $options: 'i' }
       }).limit(5);
 
-      // Move phone matches to front
       phoneMatches.forEach(customer => {
         const existingIndex = results.findIndex(r => r.type === 'customer' && r.id === customer._id.toString());
         if (existingIndex !== -1) {
@@ -196,14 +164,13 @@ const globalSearch = catchAsync(async (req, res, next) => {
       });
     }
 
-    // Sort results: customers first, then vehicles, then work orders, then by relevance
+    // Sort results: customers first, then properties, then work orders
     results.sort((a, b) => {
-      const typeOrder = { customer: 1, vehicle: 2, workorder: 3 };
+      const typeOrder = { customer: 1, property: 2, workorder: 3 };
       if (typeOrder[a.type] !== typeOrder[b.type]) {
         return typeOrder[a.type] - typeOrder[b.type];
       }
 
-      // Within same type, prioritize exact matches (use rawQuery for comparison)
       const aExact = a.title.toLowerCase().includes(rawQuery.toLowerCase()) ? 1 : 0;
       const bExact = b.title.toLowerCase().includes(rawQuery.toLowerCase()) ? 1 : 0;
       return bExact - aExact;
@@ -213,7 +180,7 @@ const globalSearch = catchAsync(async (req, res, next) => {
       status: 'success',
       results: results.length,
       data: {
-        results: results.slice(0, 20) // Limit to 20 results
+        results: results.slice(0, 20)
       }
     });
 

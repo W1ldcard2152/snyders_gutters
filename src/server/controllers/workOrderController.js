@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const WorkOrder = require('../models/WorkOrder');
-const Vehicle = require('../models/Vehicle');
+const Property = require('../models/Property');
 const Customer = require('../models/Customer');
 const Appointment = require('../models/Appointment');
 const WorkOrderNote = require('../models/WorkOrderNote');
@@ -9,33 +9,21 @@ const ServicePackage = require('../models/ServicePackage');
 const Settings = require('../models/Settings');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
-const { parseLocalDate, buildDateRangeQuery, parseDateOrDefault, todayInTz, startOfTodayInTz, getDayBoundaries } = require('../utils/dateUtils');
+const { parseLocalDate, buildDateRangeQuery, todayInTz, startOfTodayInTz, getDayBoundaries } = require('../utils/dateUtils');
 const { applyPopulation } = require('../utils/populationHelpers');
-const { validateEntityExists, validateVehicleOwnership } = require('../utils/validationHelpers');
+const { validateEntityExists } = require('../utils/validationHelpers');
 const { calculateWorkOrderTotal, getWorkOrderCostBreakdown } = require('../utils/calculationHelpers');
 const twilioService = require('../services/twilioService');
 const emailService = require('../services/emailService');
 const cacheService = require('../services/cacheService');
 const { formatDate, TIMEZONE } = require('../config/timezone');
 
-// Status aliases for backward compatibility - defined once at module level
-const STATUS_ALIASES = {
-  'Quote': ['Quote'],
-  'Work Order Created': ['Work Order Created', 'Created'],
-  'Appointment Scheduled': ['Appointment Scheduled', 'Scheduled', 'Inspection/Diag Scheduled', 'Repair Scheduled'],
-  'Appointment Complete': ['Appointment Complete'],
-  'Inspection/Diag Complete': ['Inspection/Diag Complete', 'Inspected/Parts Ordered'],
-  'Repair Complete - Awaiting Payment': ['Repair Complete - Awaiting Payment', 'Completed - Awaiting Payment'],
-  'Repair Complete - Invoiced': ['Repair Complete - Invoiced', 'Invoiced'],
-  'Quote - Archived': ['Quote - Archived']
-};
-
 // Get all work orders
 exports.getAllWorkOrders = catchAsync(async (req, res, next) => {
-  const { status, customer, vehicle, startDate, endDate, excludeStatuses } = req.query;
+  const { status, customer, property, startDate, endDate, excludeStatuses } = req.query;
 
   // Generate cache key from query parameters
-  const cacheKey = `workorders:all:${JSON.stringify({ status, customer, vehicle, startDate, endDate, excludeStatuses })}`;
+  const cacheKey = `workorders:all:${JSON.stringify({ status, customer, property, startDate, endDate, excludeStatuses })}`;
 
   // Check cache first
   const cached = cacheService.get(cacheKey);
@@ -47,13 +35,11 @@ exports.getAllWorkOrders = catchAsync(async (req, res, next) => {
   const query = {};
 
   if (status && excludeStatuses) {
-    const aliasesForStatus = STATUS_ALIASES[status] || [status];
     const statusesToExclude = excludeStatuses.split(',').map(s => s.trim());
-    const allowedStatuses = aliasesForStatus.filter(s => !statusesToExclude.includes(s));
+    const allowedStatuses = [status].filter(s => !statusesToExclude.includes(s));
     query.status = { $in: allowedStatuses };
   } else if (status) {
-    const aliasesForStatus = STATUS_ALIASES[status] || [status];
-    query.status = { $in: aliasesForStatus };
+    query.status = status;
   } else if (excludeStatuses) {
     const statusesToExclude = excludeStatuses.split(',').map(s => s.trim());
     query.status = { $nin: statusesToExclude };
@@ -74,7 +60,7 @@ exports.getAllWorkOrders = catchAsync(async (req, res, next) => {
   }
 
   if (customer) query.customer = customer;
-  if (vehicle) query.vehicle = vehicle;
+  if (property) query.property = property;
   Object.assign(query, buildDateRangeQuery(startDate, endDate, 'date'));
 
   const workOrders = await applyPopulation(
@@ -135,103 +121,56 @@ exports.createWorkOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('Use POST /api/workorders/quotes to create quotes', 400));
   }
 
-  // Verify that customer and vehicle exist and are related
-  const vehicle = await validateEntityExists(Vehicle, req.body.vehicle, 'Vehicle');
+  // Validate customer exists
   const customer = await validateEntityExists(Customer, req.body.customer, 'Customer');
-  validateVehicleOwnership(vehicle, customer);
 
-  // Handle services array if provided
+  // Validate property exists and belongs to customer if provided
+  if (req.body.property) {
+    const property = await Property.findById(req.body.property);
+    if (!property) {
+      return next(new AppError('Property not found', 404));
+    }
+    if (property.customer && property.customer.toString() !== customer._id.toString()) {
+      return next(new AppError('Property does not belong to this customer', 400));
+    }
+  }
+
   let workOrderData = { ...req.body };
   workOrderData.createdBy = req.user._id;
 
+  // Handle services array if provided
   if (!workOrderData.services || workOrderData.services.length === 0) {
-    // If no services array but serviceRequested is provided, convert to services
-    if (workOrderData.serviceRequested) {
-      // Split by newlines if there are any
-      if (workOrderData.serviceRequested.includes('\n')) {
-        workOrderData.services = workOrderData.serviceRequested
-          .split('\n')
-          .filter(line => line.trim())
-          .map(line => ({ description: line.trim() }));
-      } else {
-        // Single service
-        workOrderData.services = [{ description: workOrderData.serviceRequested }];
-      }
-    } else {
-      // Empty services array if nothing provided
-      workOrderData.services = [];
-    }
+    workOrderData.services = [];
   } else if (typeof workOrderData.services === 'string') {
-    // Handle case where services might be sent as a string
     try {
       workOrderData.services = JSON.parse(workOrderData.services);
     } catch (e) {
       workOrderData.services = [{ description: workOrderData.services }];
     }
   }
-  
-  // Generate serviceRequested field for backward compatibility
-  if (Array.isArray(workOrderData.services) && workOrderData.services.length > 0) {
-    workOrderData.serviceRequested = workOrderData.services
-      .map(service => service.description)
-      .join('\n');
-  }
-  
-  // Handle skip diagnostics logic and status assignment
-  // Always set status based on skipDiagnostics flag, regardless of what client sends
-  if (workOrderData.skipDiagnostics === true) {
-    // If skip diagnostics is checked, set status to 'Inspection/Diag Complete'
-    workOrderData.status = 'Inspection/Diag Complete';
-  } else {
-    // If skip diagnostics is not checked, set status to 'Work Order Created'
-    workOrderData.status = 'Work Order Created';
-  }
-  
-  // Calculate total estimate if parts and labor are provided
+
+  // Always set status to 'Work Order Created'
+  workOrderData.status = 'Work Order Created';
+
+  // Calculate total estimate if materials and labor are provided
   if (!workOrderData.totalEstimate) {
     workOrderData.totalEstimate = calculateWorkOrderTotal(
-      workOrderData.parts,
+      workOrderData.materials,
       workOrderData.labor,
       workOrderData.servicePackages
     );
   }
 
-  // Store diagnosticNotes temporarily and remove from workOrderData before creating
-  const initialNotes = workOrderData.diagnosticNotes;
-  delete workOrderData.diagnosticNotes;
-
   const newWorkOrder = await WorkOrder.create(workOrderData);
 
-  // Create a note from initial notes if provided
-  if (initialNotes && initialNotes.trim()) {
-    try {
-      await WorkOrderNote.create({
-        workOrder: newWorkOrder._id,
-        content: initialNotes.trim(),
-        isCustomerFacing: true, // Default to customer facing as requested
-        createdByName: 'System' // System-generated note
-      });
-    } catch (noteError) {
-      console.error('Error creating note from diagnostic notes:', noteError);
-      // Don't fail the work order creation if note creation fails
+  // Add the work order to the property's service history
+  if (workOrderData.property) {
+    const property = await Property.findById(workOrderData.property);
+    if (property) {
+      property.serviceHistory.push(newWorkOrder._id);
+      await property.save({ validateBeforeSave: false });
     }
   }
-  
-  // Add the work order to the vehicle's service history
-  vehicle.serviceHistory.push(newWorkOrder._id);
-  
-  // Update vehicle mileage if currentMileage is provided
-  if (workOrderData.currentMileage && !isNaN(parseFloat(workOrderData.currentMileage))) {
-    const mileageValue = parseFloat(workOrderData.currentMileage);
-    vehicle.mileageHistory.push({
-      date: parseDateOrDefault(workOrderData.date),
-      mileage: mileageValue,
-      source: `Work Order #${newWorkOrder.id}`
-    });
-    vehicle.currentMileage = mileageValue;
-  }
-  
-  await vehicle.save({ validateBeforeSave: false });
 
   // Invalidate caches since new work order was created
   cacheService.invalidateAllWorkOrders();
@@ -247,12 +186,10 @@ exports.createWorkOrder = catchAsync(async (req, res, next) => {
 
 // Update a work order
 exports.updateWorkOrder = catchAsync(async (req, res, next) => {
-  // Handle services array if provided
   let workOrderData = { ...req.body };
-  
+
   // Process services array
   if (workOrderData.services) {
-    // Ensure services is in the correct format
     if (typeof workOrderData.services === 'string') {
       try {
         workOrderData.services = JSON.parse(workOrderData.services);
@@ -260,195 +197,59 @@ exports.updateWorkOrder = catchAsync(async (req, res, next) => {
         workOrderData.services = [{ description: workOrderData.services }];
       }
     }
-    
-    // Generate serviceRequested field for backward compatibility
-    workOrderData.serviceRequested = Array.isArray(workOrderData.services) 
-      ? workOrderData.services.map(s => s.description).join('\n')
-      : '';
-  } else if (workOrderData.serviceRequested) {
-    // If serviceRequested is provided but not services, convert to services array
-    if (workOrderData.serviceRequested.includes('\n')) {
-      workOrderData.services = workOrderData.serviceRequested
-        .split('\n')
-        .filter(line => line.trim())
-        .map(line => ({ description: line.trim() }));
-    } else {
-      workOrderData.services = [{ description: workOrderData.serviceRequested }];
-    }
   }
-  
-  // Recalculate total estimate/actual if parts or labor changed
-  if (workOrderData.parts || workOrderData.labor) {
+
+  // Recalculate total estimate/actual if materials or labor changed
+  if (workOrderData.materials || workOrderData.labor) {
     const workOrder = await validateEntityExists(WorkOrder, req.params.id, 'Work order');
 
-    const parts = workOrderData.parts || workOrder.parts;
+    const materials = workOrderData.materials || workOrder.materials;
     const labor = workOrderData.labor || workOrder.labor;
     const servicePackages = workOrderData.servicePackages || workOrder.servicePackages;
-    workOrderData.totalEstimate = calculateWorkOrderTotal(parts, labor, servicePackages);
+    workOrderData.totalEstimate = calculateWorkOrderTotal(materials, labor, servicePackages);
   }
-  
-  
-  // Handle currentMileage update for the vehicle
-  if (workOrderData.currentMileage && !isNaN(parseFloat(workOrderData.currentMileage))) {
-    const mileageValue = parseFloat(workOrderData.currentMileage);
-    const workOrderForVehicle = await WorkOrder.findById(req.params.id).populate('vehicle');
 
-    if (workOrderForVehicle?.vehicle) {
-      const vehicleToUpdate = await Vehicle.findById(workOrderForVehicle.vehicle._id);
-      if (vehicleToUpdate) {
-        const entryDate = parseDateOrDefault(workOrderData.date);
-
-        // Check if this mileage entry already exists to avoid duplicates
-        const existingMileageEntry = vehicleToUpdate.mileageHistory.find(
-          entry => entry.mileage === mileageValue &&
-                   formatDate(entry.date, 'YYYY-MM-DD') === formatDate(entryDate, 'YYYY-MM-DD') &&
-                   (entry.source || '').includes(`Work Order #${req.params.id}`)
-        );
-
-        if (!existingMileageEntry) {
-          vehicleToUpdate.mileageHistory.push({
-            date: entryDate,
-            mileage: mileageValue,
-            source: `Work Order #${req.params.id}`
-          });
-        }
-        vehicleToUpdate.currentMileage = mileageValue;
-        await vehicleToUpdate.save({ validateBeforeSave: false });
-      }
-    }
-  }
-  
-  // If status is being updated
+  // If status is being updated, check for notification
   if (workOrderData.status) {
     const oldWorkOrder = await WorkOrder.findById(req.params.id)
       .populate('customer')
-      .populate('vehicle');
-      
+      .populate('property');
+
     if (oldWorkOrder && oldWorkOrder.status !== workOrderData.status) {
-      // Send notification if status is changing to a notifiable status
-      const notifiableStatuses = [
-        'Inspected/Parts Ordered',
-        'Parts Received',
-        'Repair In Progress',
-        'Repair Complete - Awaiting Payment',
-        'Repair Complete - Invoiced'
-      ];
-      
-      if (notifiableStatuses.includes(workOrderData.status) && 
-          oldWorkOrder.customer && 
-          oldWorkOrder.vehicle) {
-        
+      const notifiableStatuses = ['In Progress', 'Complete', 'Invoiced'];
+
+      if (notifiableStatuses.includes(workOrderData.status) &&
+          oldWorkOrder.customer &&
+          oldWorkOrder.property) {
+
         // Send SMS notification if customer prefers SMS
-        if (oldWorkOrder.customer.communicationPreference === 'SMS' && 
+        if (oldWorkOrder.customer.communicationPreference === 'SMS' &&
             oldWorkOrder.customer.phone) {
           try {
             await twilioService.sendStatusUpdate(
               { status: workOrderData.status },
               oldWorkOrder.customer,
-              oldWorkOrder.vehicle
+              oldWorkOrder.property
             );
           } catch (err) {
             console.error('Failed to send SMS notification:', err);
-            // Don't fail the update if notification fails
           }
         }
-        
+
         // Send email notification if customer prefers Email
-        if (oldWorkOrder.customer.communicationPreference === 'Email' && 
+        if (oldWorkOrder.customer.communicationPreference === 'Email' &&
             oldWorkOrder.customer.email) {
           try {
-            // This would require implementing a specific email template for status updates
             // await emailService.sendStatusUpdate(...);
           } catch (err) {
             console.error('Failed to send email notification:', err);
-            // Don't fail the update if notification fails
           }
         }
       }
     }
   }
-  
-  const oldWorkOrder = await WorkOrder.findById(req.params.id); // Get current state for comparison
 
-  // If an appointmentId is present and has a technician, ensure workOrder.assignedTechnician is synced
-  if (workOrderData.appointmentId) {
-    const Appointment = require('../models/Appointment'); // Ensure Appointment model is available
-    const appointment = await Appointment.findById(workOrderData.appointmentId).populate('technician');
-    if (appointment && appointment.technician) {
-      workOrderData.assignedTechnician = appointment.technician._id;
-    }
-  } else if (workOrderData.hasOwnProperty('appointmentId') && workOrderData.appointmentId === null) {
-    // If appointmentId is explicitly set to null, consider unassigning the technician
-    // or leaving it as is, depending on desired logic. For now, we'll let assignedTechnician be managed separately if no appointment.
-  }
-
-  // If status is changing to "Parts Ordered", mark all parts as ordered
-  if (workOrderData.status === 'Parts Ordered') {
-    const currentWorkOrder = await WorkOrder.findById(req.params.id);
-    if (currentWorkOrder && currentWorkOrder.status !== 'Parts Ordered') {
-      if (currentWorkOrder.parts && currentWorkOrder.parts.length > 0) {
-        workOrderData.parts = currentWorkOrder.parts.map(part => ({
-          ...part.toObject(),
-          ordered: true
-        }));
-      }
-    }
-  }
-
-  // If status is changing to "Parts Received", mark all parts as received
-  if (workOrderData.status === 'Parts Received') {
-    const currentWorkOrder = await WorkOrder.findById(req.params.id);
-    if (currentWorkOrder && currentWorkOrder.status !== 'Parts Received') {
-      // Only auto-mark parts if status is actually changing to Parts Received
-      if (currentWorkOrder.parts && currentWorkOrder.parts.length > 0) {
-        workOrderData.parts = currentWorkOrder.parts.map(part => ({
-          ...part.toObject(),
-          received: true
-        }));
-      }
-    }
-  }
-
-  // Auto-update status based on part flags (forward triggers)
-  // Only apply when parts are being updated and status isn't being explicitly changed
-  if (workOrderData.parts && workOrderData.parts.length > 0) {
-    const currentWO = await WorkOrder.findById(req.params.id);
-    const currentStatus = workOrderData.status || currentWO?.status;
-
-    // If all parts are ordered, auto-set status to "Parts Ordered"
-    const preOrderStatuses = ['Work Order Created', 'Appointment Scheduled', 'Appointment Complete', 'Inspection In Progress', 'Inspection/Diag Complete'];
-    const allPartsOrdered = workOrderData.parts.every(part => part.ordered === true);
-    if (allPartsOrdered && preOrderStatuses.includes(currentStatus)) {
-      workOrderData.status = 'Parts Ordered';
-    }
-
-    // If all parts are received, auto-set status to "Parts Received"
-    // Exclude 'Appointment Scheduled' — that status takes priority over parts tracking
-    const preReceivedStatuses = ['Parts Ordered', ...preOrderStatuses].filter(s => s !== 'Appointment Scheduled');
-    const allPartsReceived = workOrderData.parts.every(part => part.received === true);
-    if (allPartsReceived && preReceivedStatuses.includes(currentStatus)) {
-      workOrderData.status = 'Parts Received';
-    }
-  }
-
-  // Check if diagnosticNotes have been updated and create a customer-facing note if they have
-  // Store diagnosticNotes temporarily
-  const updateNotes = workOrderData.diagnosticNotes;
-  if (updateNotes && updateNotes.trim()) {
-    try {
-      await WorkOrderNote.create({
-        workOrder: req.params.id,
-        content: updateNotes.trim(),
-        isCustomerFacing: true,
-        createdByName: 'System' // System-generated note
-      });
-    } catch (noteError) {
-      console.error('Error creating note from updated diagnostic notes:', noteError);
-      // Don't fail the work order update if note creation fails
-    }
-  }
-  // Always clear diagnosticNotes field - set to empty string to ensure it's cleared in DB
-  workOrderData.diagnosticNotes = '';
+  const oldWorkOrder = await WorkOrder.findById(req.params.id);
 
   const updatedWorkOrderPopulated = await applyPopulation(
     WorkOrder.findByIdAndUpdate(req.params.id, workOrderData, {
@@ -462,19 +263,7 @@ exports.updateWorkOrder = catchAsync(async (req, res, next) => {
   if (!updatedWorkOrderPopulated) {
     return next(new AppError('No work order found with that ID', 404));
   }
-  
-  // Sync assignedTechnician if appointmentId and its technician exist
-  // This logic is now moved before the update to ensure workOrderData contains the correct technician
-  // if (updatedWorkOrderPopulated.appointmentId && updatedWorkOrderPopulated.appointmentId.technician) {
-  //   if (!updatedWorkOrderPopulated.assignedTechnician || 
-  //       updatedWorkOrderPopulated.assignedTechnician._id.toString() !== updatedWorkOrderPopulated.appointmentId.technician._id.toString()) {
-  //     updatedWorkOrderPopulated.assignedTechnician = updatedWorkOrderPopulated.appointmentId.technician._id;
-  //     // Re-save if we updated assignedTechnician after the initial update.
-  //     // This is not ideal. Better to include in the initial update.
-  //     // await updatedWorkOrderPopulated.save({ validateBeforeSave: false });
-  //   }
-  // }
-  
+
   res.status(200).json({
     status: 'success',
     data: {
@@ -486,7 +275,7 @@ exports.updateWorkOrder = catchAsync(async (req, res, next) => {
   cacheService.invalidateAllWorkOrders();
   cacheService.invalidateServiceWritersCorner();
 
-  // Invalidate appointment cache if work order status changed (appointments display work order status)
+  // Invalidate appointment cache if work order status changed
   if (workOrderData.status && oldWorkOrder && oldWorkOrder.status !== workOrderData.status) {
     cacheService.invalidateAllAppointments();
   }
@@ -508,12 +297,11 @@ exports.deleteWorkOrder = catchAsync(async (req, res, next) => {
     }
   } catch (appointmentError) {
     console.error('Error deleting associated appointments:', appointmentError);
-    // Continue with work order deletion even if appointment deletion fails
   }
 
-  // Remove from vehicle's service history
-  await Vehicle.findByIdAndUpdate(
-    workOrder.vehicle,
+  // Remove from property's service history
+  await Property.findByIdAndUpdate(
+    workOrder.property,
     { $pull: { serviceHistory: req.params.id } }
   );
 
@@ -545,11 +333,11 @@ exports.updateStatus = catchAsync(async (req, res, next) => {
     if (!holdReason) {
       return next(new AppError('A hold reason is required when placing a work order on hold', 400));
     }
-    if (holdReason === 'Other' && !holdReasonOther) {
+    if (holdReason === 'other' && !holdReasonOther) {
       return next(new AppError('Please provide a reason when selecting "Other"', 400));
     }
     workOrder.holdReason = holdReason;
-    workOrder.holdReasonOther = holdReason === 'Other' ? holdReasonOther : undefined;
+    workOrder.holdReasonOther = holdReason === 'other' ? holdReasonOther : undefined;
   } else {
     // Clear hold reason when leaving On Hold status
     if (workOrder.status === 'On Hold') {
@@ -560,23 +348,9 @@ exports.updateStatus = catchAsync(async (req, res, next) => {
 
   workOrder.status = status;
 
-  // If the status is "Parts Ordered", mark all parts as ordered
-  if (status === 'Parts Ordered') {
-    workOrder.parts.forEach(part => {
-      part.ordered = true;
-    });
-  }
-
-  // If the status is "Parts Received", mark all parts as received
-  if (status === 'Parts Received') {
-    workOrder.parts.forEach(part => {
-      part.received = true;
-    });
-  }
-
   // If the status is "Invoiced", set the totalActual
-  if (status === 'Repair Complete - Invoiced') {
-    workOrder.totalActual = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  if (status === 'Invoiced') {
+    workOrder.totalActual = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   }
 
   await workOrder.save({ validateBeforeSave: false });
@@ -587,30 +361,31 @@ exports.updateStatus = catchAsync(async (req, res, next) => {
     'workOrder',
     'detailed'
   );
-  
+
   // Send notification if customer has communication preference set
-  if (populatedWorkOrder.customer && 
-      populatedWorkOrder.customer.communicationPreference !== 'None') {
-    
+  const notifiableStatuses = ['In Progress', 'Complete', 'Invoiced'];
+  if (populatedWorkOrder.customer &&
+      populatedWorkOrder.customer.communicationPreference !== 'None' &&
+      notifiableStatuses.includes(status)) {
+
     // For SMS notification
-    if (populatedWorkOrder.customer.communicationPreference === 'SMS' && 
+    if (populatedWorkOrder.customer.communicationPreference === 'SMS' &&
         populatedWorkOrder.customer.phone) {
       try {
         await twilioService.sendStatusUpdate(
           populatedWorkOrder,
           populatedWorkOrder.customer,
-          populatedWorkOrder.vehicle
+          populatedWorkOrder.property
         );
       } catch (err) {
         console.error('Failed to send SMS notification:', err);
-        // Don't fail the update if notification fails
       }
     }
-    
+
     // For Email notification
     // This would require implementing a specific email template for status updates
   }
-  
+
   // Invalidate caches since work order status was updated
   cacheService.invalidateAllWorkOrders();
   cacheService.invalidateServiceWritersCorner();
@@ -624,12 +399,12 @@ exports.updateStatus = catchAsync(async (req, res, next) => {
   });
 });
 
-// Add part to work order
-exports.addPart = catchAsync(async (req, res, next) => {
+// Add material to work order
+exports.addMaterial = catchAsync(async (req, res, next) => {
   const workOrder = await validateEntityExists(WorkOrder, req.params.id, 'Work order');
 
-  workOrder.parts.push(req.body);
-  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  workOrder.materials.push(req.body);
+  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   await workOrder.save();
 
   const populatedWorkOrderAfterAdd = await applyPopulation(
@@ -638,7 +413,7 @@ exports.addPart = catchAsync(async (req, res, next) => {
     'detailed'
   );
 
-  // Invalidate caches since parts were added to work order
+  // Invalidate caches since materials were added to work order
   cacheService.invalidateAllWorkOrders();
   cacheService.invalidateServiceWritersCorner();
 
@@ -648,8 +423,8 @@ exports.addPart = catchAsync(async (req, res, next) => {
   });
 });
 
-// Add part from inventory to work order (deducts inventory QOH)
-exports.addPartFromInventory = catchAsync(async (req, res, next) => {
+// Add material from inventory to work order (deducts inventory QOH)
+exports.addMaterialFromInventory = catchAsync(async (req, res, next) => {
   const { inventoryItemId, quantity } = req.body;
   if (!inventoryItemId || !quantity || quantity < 1) {
     return next(new AppError('inventoryItemId and quantity (>= 1) are required', 400));
@@ -666,7 +441,7 @@ exports.addPartFromInventory = catchAsync(async (req, res, next) => {
   }
 
   const settings = await Settings.getSettings();
-  const markup = settings.partMarkupPercentage || 30;
+  const markup = settings.supplyMarkupPercentage || 20;
   const price = parseFloat((item.cost * (1 + markup / 100)).toFixed(2));
 
   // Deduct inventory atomically
@@ -691,8 +466,8 @@ exports.addPartFromInventory = catchAsync(async (req, res, next) => {
     return next(new AppError('Insufficient stock (concurrent update)', 409));
   }
 
-  // Add part line to work order
-  workOrder.parts.push({
+  // Add material line to work order
+  workOrder.materials.push({
     name: item.name,
     partNumber: item.partNumber || '',
     quantity,
@@ -702,11 +477,9 @@ exports.addPartFromInventory = catchAsync(async (req, res, next) => {
     warranty: item.warranty || '',
     url: item.url || '',
     category: item.category || '',
-    inventoryItemId: item._id,
-    ordered: true,
-    received: true
+    inventoryItemId: item._id
   });
-  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   await workOrder.save();
 
   const populatedWorkOrder = await applyPopulation(
@@ -735,7 +508,6 @@ exports.addPartFromInventory = catchAsync(async (req, res, next) => {
   res.status(200).json(response);
 });
 
-// Add service package to work order (labor line + $0 included parts + inventory deductions)
 // Add service package as draft (no inventory deduction yet)
 exports.addServicePackage = catchAsync(async (req, res, next) => {
   const { servicePackageId, selections } = req.body;
@@ -795,7 +567,7 @@ exports.addServicePackage = catchAsync(async (req, res, next) => {
     includedItems: packageIncludedItems
   });
 
-  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   await workOrder.save();
 
   const populatedWorkOrder = await applyPopulation(
@@ -904,7 +676,7 @@ exports.commitServicePackage = catchAsync(async (req, res, next) => {
   res.status(200).json(response);
 });
 
-// Remove a service package from work order (does NOT return inventory)
+// Remove a service package from work order (does NOT return inventory by default)
 exports.removeServicePackage = catchAsync(async (req, res, next) => {
   const workOrder = await validateEntityExists(WorkOrder, req.params.id, 'Work order');
   const { packageIndex, returnToInventory } = req.body;
@@ -940,7 +712,7 @@ exports.removeServicePackage = catchAsync(async (req, res, next) => {
   }
 
   workOrder.servicePackages.splice(packageIndex, 1);
-  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   await workOrder.save();
 
   const populatedWorkOrder = await applyPopulation(
@@ -963,7 +735,7 @@ exports.addLabor = catchAsync(async (req, res, next) => {
   const workOrder = await validateEntityExists(WorkOrder, req.params.id, 'Work order');
 
   workOrder.labor.push(req.body);
-  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.parts, workOrder.labor, workOrder.servicePackages);
+  workOrder.totalEstimate = calculateWorkOrderTotal(workOrder.materials, workOrder.labor, workOrder.servicePackages);
   await workOrder.save();
 
   const populatedWorkOrderAfterAddLabor = await applyPopulation(
@@ -1024,23 +796,20 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
     return next(new AppError('No work order found with that ID', 404));
   }
 
-  const { partsCost, laborCost, total: totalCost } = getWorkOrderCostBreakdown(workOrder);
-  
-  // In a real application, you would generate a PDF here
-  // For now, we'll just return the invoice data
-  
+  const { materialsCost, laborCost, total: totalCost } = getWorkOrderCostBreakdown(workOrder);
+
   res.status(200).json({
     status: 'success',
     data: {
       invoice: {
         workOrderId: workOrder._id,
         customer: workOrder.customer,
-        vehicle: workOrder.vehicle,
-        assignedTechnician: workOrder.assignedTechnician, // Include technician in invoice data
+        property: workOrder.property,
+        assignedTechnician: workOrder.assignedTechnician,
         date: workOrder.date,
-        parts: workOrder.parts,
+        materials: workOrder.materials,
         labor: workOrder.labor,
-        partsCost,
+        materialsCost,
         laborCost,
         totalCost,
         status: workOrder.status
@@ -1049,7 +818,7 @@ exports.generateInvoice = catchAsync(async (req, res, next) => {
   });
 });
 
-// Search work orders - Updated to search in services array
+// Search work orders
 exports.searchWorkOrders = catchAsync(async (req, res, next) => {
   const { query } = req.query;
 
@@ -1061,10 +830,11 @@ exports.searchWorkOrders = catchAsync(async (req, res, next) => {
     WorkOrder.find({
       status: { $ne: 'Quote' },
       $or: [
-        { serviceRequested: { $regex: query, $options: 'i' } },
+        { serviceNotes: { $regex: query, $options: 'i' } },
         { 'services.description': { $regex: query, $options: 'i' } },
         { status: { $regex: query, $options: 'i' } },
-        { diagnosticNotes: { $regex: query, $options: 'i' } }
+        { 'materials.name': { $regex: query, $options: 'i' } },
+        { 'materials.partNumber': { $regex: query, $options: 'i' } }
       ]
     }),
     'workOrder',
@@ -1078,33 +848,33 @@ exports.searchWorkOrders = catchAsync(async (req, res, next) => {
   });
 });
 
-// Get work orders awaiting scheduling (Parts Received status with no future appointments)
+// Get work orders awaiting scheduling ('Work Order Created' status with no future appointments)
 exports.getWorkOrdersAwaitingScheduling = catchAsync(async (req, res, next) => {
-  // Get all work orders with "Parts Received" status
-  const partsReceivedWorkOrders = await applyPopulation(
-    WorkOrder.find({ status: 'Parts Received' }),
+  // Get all work orders with 'Work Order Created' status
+  const workOrderCreatedWorkOrders = await applyPopulation(
+    WorkOrder.find({ status: 'Work Order Created' }),
     'workOrder',
     'standard'
   );
-  
+
   // Get all future appointments (starting from now)
   const now = new Date();
   const futureAppointments = await Appointment.find({
     startTime: { $gte: now },
     workOrder: { $exists: true },
-    status: { $nin: ['Cancelled', 'No-Show'] } // Exclude cancelled/no-show appointments
+    status: { $nin: ['Cancelled', 'No-Show'] }
   }).select('workOrder');
-  
+
   // Create a Set of work order IDs that have future appointments
   const scheduledWorkOrderIds = new Set(
     futureAppointments.map(apt => apt.workOrder.toString())
   );
-  
+
   // Filter out work orders that have future appointments
-  const unscheduledWorkOrders = partsReceivedWorkOrders.filter(
+  const unscheduledWorkOrders = workOrderCreatedWorkOrders.filter(
     wo => !scheduledWorkOrderIds.has(wo._id.toString())
   );
-  
+
   res.status(200).json({
     status: 'success',
     results: unscheduledWorkOrders.length,
@@ -1116,32 +886,31 @@ exports.getWorkOrdersAwaitingScheduling = catchAsync(async (req, res, next) => {
 
 // Get all work orders that need scheduling (for appointments page)
 exports.getWorkOrdersNeedingScheduling = catchAsync(async (req, res, next) => {
-  // Get all work orders with statuses that typically need scheduling
-  const needsSchedulingStatuses = ['Created', 'Appointment Complete', 'Inspected/Parts Ordered', 'Parts Received'];
+  const needsSchedulingStatuses = ['Work Order Created'];
   const workOrders = await applyPopulation(
     WorkOrder.find({ status: { $in: needsSchedulingStatuses } }),
     'workOrder',
     'standard'
   );
-  
+
   // Get all future appointments (starting from now)
   const now = new Date();
   const futureAppointments = await Appointment.find({
     startTime: { $gte: now },
     workOrder: { $exists: true },
-    status: { $nin: ['Cancelled', 'No-Show'] } // Exclude cancelled/no-show appointments
+    status: { $nin: ['Cancelled', 'No-Show'] }
   }).select('workOrder');
-  
+
   // Create a Set of work order IDs that have future appointments
   const scheduledWorkOrderIds = new Set(
     futureAppointments.map(apt => apt.workOrder.toString())
   );
-  
+
   // Filter out work orders that have future appointments
   const unscheduledWorkOrders = workOrders.filter(
     wo => !scheduledWorkOrderIds.has(wo._id.toString())
   );
-  
+
   res.status(200).json({
     status: 'success',
     results: unscheduledWorkOrders.length,
@@ -1155,50 +924,48 @@ exports.getWorkOrdersNeedingScheduling = catchAsync(async (req, res, next) => {
 exports.splitWorkOrder = catchAsync(async (req, res, next) => {
   const originalWorkOrder = await WorkOrder.findById(req.params.id)
     .populate('customer')
-    .populate('vehicle')
+    .populate('property')
     .populate('assignedTechnician');
-  
+
   if (!originalWorkOrder) {
     return next(new AppError('No work order found with that ID', 404));
   }
 
-  // Extract the parts and labor to move to new work order
-  const { partsToMove, laborToMove, newWorkOrderTitle } = req.body;
+  // Extract the materials and labor to move to new work order
+  const { materialsToMove, laborToMove, newWorkOrderTitle } = req.body;
 
-  if (!partsToMove && !laborToMove) {
-    return next(new AppError('Must specify parts or labor to move to new work order', 400));
+  if (!materialsToMove && !laborToMove) {
+    return next(new AppError('Must specify materials or labor to move to new work order', 400));
   }
 
-  // Validate that the parts and labor to move exist in the original work order
-  const partsToMoveIds = partsToMove || [];
+  const materialsToMoveIds = materialsToMove || [];
   const laborToMoveIds = laborToMove || [];
 
-  // Find the actual parts and labor items to move
-  const partsToMoveItems = originalWorkOrder.parts.filter(part => 
-    partsToMoveIds.includes(part._id.toString())
+  // Find the actual materials and labor items to move
+  const materialsToMoveItems = originalWorkOrder.materials.filter(material =>
+    materialsToMoveIds.includes(material._id.toString())
   );
-  const laborToMoveItems = originalWorkOrder.labor.filter(labor => 
+  const laborToMoveItems = originalWorkOrder.labor.filter(labor =>
     laborToMoveIds.includes(labor._id.toString())
   );
 
-  if (partsToMoveItems.length !== partsToMoveIds.length || 
+  if (materialsToMoveItems.length !== materialsToMoveIds.length ||
       laborToMoveItems.length !== laborToMoveIds.length) {
-    return next(new AppError('Some specified parts or labor items not found', 400));
+    return next(new AppError('Some specified materials or labor items not found', 400));
   }
 
   // Create new work order with moved items
   const newWorkOrder = new WorkOrder({
     customer: originalWorkOrder.customer._id,
-    vehicle: originalWorkOrder.vehicle._id,
+    property: originalWorkOrder.property?._id,
     assignedTechnician: originalWorkOrder.assignedTechnician ? originalWorkOrder.assignedTechnician._id : null,
     date: todayInTz(),
     priority: originalWorkOrder.priority,
-    status: 'Created',
-    serviceRequested: newWorkOrderTitle || `Split from WO ${originalWorkOrder._id.toString().slice(-6)}`,
-    diagnosticNotes: `Split from work order ${originalWorkOrder._id.toString().slice(-6)} on ${formatDate(todayInTz())}`,
-    parts: partsToMoveItems.map(part => {
-      const { _id, ...partData } = part.toObject ? part.toObject() : part;
-      return partData;
+    status: 'Work Order Created',
+    serviceNotes: newWorkOrderTitle || `Split from WO ${originalWorkOrder._id.toString().slice(-6)}`,
+    materials: materialsToMoveItems.map(material => {
+      const { _id, ...materialData } = material.toObject ? material.toObject() : material;
+      return materialData;
     }),
     labor: laborToMoveItems.map(labor => ({
       description: labor.description,
@@ -1209,24 +976,24 @@ exports.splitWorkOrder = catchAsync(async (req, res, next) => {
   });
 
   // Calculate totals for new work order
-  newWorkOrder.totalEstimate = calculateWorkOrderTotal(newWorkOrder.parts, newWorkOrder.labor, newWorkOrder.servicePackages);
+  newWorkOrder.totalEstimate = calculateWorkOrderTotal(newWorkOrder.materials, newWorkOrder.labor, newWorkOrder.servicePackages);
 
   // Remove moved items from original work order
-  originalWorkOrder.parts = originalWorkOrder.parts.filter(part =>
-    !partsToMoveIds.includes(part._id.toString())
+  originalWorkOrder.materials = originalWorkOrder.materials.filter(material =>
+    !materialsToMoveIds.includes(material._id.toString())
   );
   originalWorkOrder.labor = originalWorkOrder.labor.filter(labor =>
     !laborToMoveIds.includes(labor._id.toString())
   );
 
   // Update totals for original work order
-  originalWorkOrder.totalEstimate = calculateWorkOrderTotal(originalWorkOrder.parts, originalWorkOrder.labor, originalWorkOrder.servicePackages);
+  originalWorkOrder.totalEstimate = calculateWorkOrderTotal(originalWorkOrder.materials, originalWorkOrder.labor, originalWorkOrder.servicePackages);
 
   // Add note to original work order about the split
-  if (!originalWorkOrder.diagnosticNotes) {
-    originalWorkOrder.diagnosticNotes = '';
+  if (!originalWorkOrder.serviceNotes) {
+    originalWorkOrder.serviceNotes = '';
   }
-  originalWorkOrder.diagnosticNotes += `\n\nWork order split on ${formatDate(todayInTz())}. Moved items to new work order.`;
+  originalWorkOrder.serviceNotes += `\n\nWork order split on ${formatDate(todayInTz())}. Moved items to new work order.`;
 
   // Save both work orders
   await Promise.all([
@@ -1237,7 +1004,7 @@ exports.splitWorkOrder = catchAsync(async (req, res, next) => {
   // Populate the new work order for response
   await newWorkOrder.populate([
     { path: 'customer', select: 'name phone email' },
-    { path: 'vehicle', select: 'year make model vin licensePlate' },
+    { path: 'property', select: 'address type' },
     { path: 'assignedTechnician', select: 'name specialization' }
   ]);
 
@@ -1261,10 +1028,7 @@ exports.getServiceWritersCorner = catchAsync(async (req, res, next) => {
   // Service writer action statuses
   const swcStatuses = [
     'Work Order Created',
-    'Appointment Complete',
-    'Inspection/Diag Complete',
-    'Parts Received',
-    'Repair Complete - Awaiting Payment',
+    'Complete',
     'On Hold',
     'No-Show'
   ];
@@ -1287,11 +1051,6 @@ exports.getServiceWritersCorner = catchAsync(async (req, res, next) => {
     }
     workOrderAppointments.get(woId).push(apt);
   });
-
-  // Get work order IDs that have future appointments (for Parts Received filtering)
-  const scheduledWorkOrderIds = new Set(
-    appointments.map(apt => apt.workOrder.toString())
-  );
 
   // Helper function to add appointment info to work orders
   const addAppointmentInfo = (workOrders) => {
@@ -1316,15 +1075,7 @@ exports.getServiceWritersCorner = catchAsync(async (req, res, next) => {
     'standard'
   );
 
-  // Filter out Parts Received WOs that already have a future appointment scheduled
-  const filtered = allWorkOrdersRaw.filter(wo => {
-    if (wo.status === 'Parts Received') {
-      return !scheduledWorkOrderIds.has(wo._id.toString());
-    }
-    return true;
-  });
-
-  const workOrders = addAppointmentInfo(filtered);
+  const workOrders = addAppointmentInfo(allWorkOrdersRaw);
 
   const responseData = {
     status: 'success',
@@ -1340,240 +1091,7 @@ exports.getServiceWritersCorner = catchAsync(async (req, res, next) => {
   res.status(200).json(responseData);
 });
 
-// Step 1: Extract parts from receipt using AI (returns raw parts for user review)
-// Multer setup for receipt upload (used as route-level middleware)
-const multer = require('multer');
-const receiptUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }
-}).single('receipt');
-exports.receiptUpload = receiptUpload;
-
-exports.extractReceipt = catchAsync(async (req, res, next) => {
-  const aiService = require('../services/aiService');
-  const s3Service = require('../services/s3Service');
-  const Media = require('../models/Media');
-
-  const workOrderId = req.params.id;
-
-  const workOrder = await WorkOrder.findById(workOrderId);
-  if (!workOrder) {
-    return next(new AppError('Work order not found', 404));
-  }
-
-  let receiptData, dataType, mimeType = 'image/png', mediaDoc = null;
-
-  if (req.file) {
-    mimeType = req.file.mimetype;
-
-    // Upload receipt to S3
-    const uploadResult = await s3Service.uploadFile(
-      req.file.buffer,
-      `receipt-${workOrderId}-${Date.now()}-${req.file.originalname}`,
-      req.file.mimetype
-    );
-
-    // Create Media document so receipt appears in Attached Files
-    mediaDoc = await Media.create({
-      workOrder: workOrderId,
-      vehicle: workOrder.vehicle,
-      customer: workOrder.customer,
-      type: 'Parts Receipt',
-      fileUrl: uploadResult.fileUrl,
-      s3Key: uploadResult.key,
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype,
-      fileSize: req.file.size,
-      notes: 'Receipt uploaded - pending part selection',
-      uploadedBy: req.user ? `${req.user.firstName} ${req.user.lastName}` : 'System'
-    });
-
-    if (req.file.mimetype === 'application/pdf') {
-      // Convert PDF pages to images for vision API
-      const { pdfToPng } = require('pdf-to-png-converter');
-      const pngPages = await pdfToPng(req.file.buffer, {
-        viewportScale: 2.0,
-        disableFontFace: false,
-        verbosityLevel: 0
-      });
-      console.log(`[extractReceipt] PDF converted to ${pngPages.length} page image(s)`);
-      // Send page images to AI — parseReceipt handles single or multi-page
-      receiptData = pngPages.map(p => p.content);
-      dataType = 'image';
-      mimeType = 'image/png';
-    } else {
-      receiptData = req.file.buffer;
-      dataType = 'image';
-    }
-  } else if (req.body.receiptText) {
-    receiptData = req.body.receiptText;
-    dataType = 'text';
-  } else {
-    return next(new AppError('Please provide either a receipt file or text', 400));
-  }
-
-  // Extract raw parts (no markup, no shipping amortization yet)
-  const { parts, shippingTotal } = await aiService.parseReceipt(receiptData, dataType, mimeType);
-
-  if (!parts || parts.length === 0) {
-    return next(new AppError('No parts could be extracted from the receipt', 400));
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      parts,
-      shippingTotal,
-      mediaId: mediaDoc ? mediaDoc._id : null,
-      mediaS3Key: mediaDoc ? mediaDoc.s3Key : null
-    }
-  });
-});
-
-// Step 2: Add user-selected parts to work order (with shipping amortization + markup)
-exports.confirmReceiptParts = catchAsync(async (req, res, next) => {
-  const aiService = require('../services/aiService');
-  const Media = require('../models/Media');
-
-  const workOrderId = req.params.id;
-  const { selectedParts, shippingTotal, isOrder, mediaId, mediaS3Key, catalogActions } = req.body;
-
-  if (!selectedParts || !Array.isArray(selectedParts) || selectedParts.length === 0) {
-    return next(new AppError('No parts selected', 400));
-  }
-
-  const workOrder = await WorkOrder.findById(workOrderId);
-  if (!workOrder) {
-    return next(new AppError('Work order not found', 404));
-  }
-
-  // Apply shipping amortization and markup to selected parts
-  const settings = await Settings.getSettings();
-  const finalizedParts = aiService.finalizeParts(selectedParts, shippingTotal || 0, isOrder, settings.partMarkupPercentage);
-
-  // Link receipt media to each part
-  const partsWithReceipt = finalizedParts.map(part => ({
-    ...part,
-    receiptImageUrl: mediaS3Key || null
-  }));
-
-  workOrder.parts.push(...partsWithReceipt);
-
-  // Auto-advance status if all parts ordered
-  if (isOrder) {
-    const allPartsOrdered = workOrder.parts.every(part => part.ordered === true);
-    const preOrderStatuses = [
-      'Work Order Created',
-      'Appointment Scheduled',
-      'Inspection In Progress',
-      'Inspection/Diag Complete'
-    ];
-
-    if (allPartsOrdered && preOrderStatuses.includes(workOrder.status)) {
-      workOrder.status = 'Parts Ordered';
-    }
-  }
-
-  await workOrder.save();
-
-  // Add parts to catalog/inventory if requested (best-effort)
-  if (catalogActions && typeof catalogActions === 'object') {
-    const Part = require('../models/Part');
-
-    for (const [indexStr, action] of Object.entries(catalogActions)) {
-      const part = partsWithReceipt[parseInt(indexStr)];
-      if (!part || !action) continue;
-
-      try {
-        if (action === 'catalog') {
-          const partNumber = part.itemNumber || `IMPORT-${Date.now()}-${indexStr}`;
-          await Part.findOneAndUpdate(
-            { partNumber },
-            {
-              name: part.name,
-              partNumber,
-              vendor: part.vendor || 'Unknown',
-              brand: part.vendor || 'Unknown',
-              category: 'Other',
-              cost: part.cost || 0,
-              price: part.price || 0,
-              warranty: '',
-              url: ''
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-          );
-        } else if (action === 'inventory') {
-          await InventoryItem.findOneAndUpdate(
-            { name: part.name, partNumber: part.itemNumber || '' },
-            {
-              name: part.name,
-              partNumber: part.itemNumber || '',
-              vendor: part.vendor || '',
-              cost: part.cost || 0,
-              price: part.price || 0,
-              quantityOnHand: part.quantity || 1
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-          );
-        }
-      } catch (catalogErr) {
-        console.error(`[Receipt] Failed to add part "${part.name}" to ${action}:`, catalogErr.message);
-      }
-    }
-  }
-
-  // Update media doc notes with final count
-  if (mediaId) {
-    try {
-      const mediaDoc = await Media.findById(mediaId);
-      if (mediaDoc) {
-        mediaDoc.notes = `AI-imported ${isOrder ? 'receipt' : 'quote'} - ${partsWithReceipt.length} part(s) added`;
-        await mediaDoc.save();
-      }
-    } catch (e) {
-      console.error('Error updating media notes:', e);
-    }
-  }
-
-  cacheService.invalidateAllWorkOrders();
-  cacheService.invalidateServiceWritersCorner();
-
-  res.status(200).json({
-    status: 'success',
-    message: `Successfully added ${partsWithReceipt.length} part(s)`,
-    data: {
-      workOrder,
-      addedParts: partsWithReceipt
-    }
-  });
-});
-
-// Get signed URL for receipt image
-exports.getReceiptSignedUrl = catchAsync(async (req, res, next) => {
-  const s3Service = require('../services/s3Service');
-  const { key } = req.query;
-
-  if (!key) {
-    return next(new AppError('Receipt key is required', 400));
-  }
-
-  try {
-    const signedUrl = await s3Service.getSignedUrl(key, 3600); // 1 hour expiration
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        signedUrl,
-        expiresIn: 3600
-      }
-    });
-  } catch (error) {
-    console.error('Error generating signed URL for receipt:', error);
-    return next(new AppError('Failed to generate signed URL for receipt', 500));
-  }
-});
-
-// Get active work orders by multiple statuses in a single call (replaces multiple getWorkOrdersByStatus calls)
+// Get active work orders by multiple statuses in a single call
 exports.getActiveWorkOrdersByStatuses = catchAsync(async (req, res, next) => {
   const { statuses } = req.query;
 
@@ -1628,11 +1146,7 @@ exports.getTechnicianWorkOrders = catchAsync(async (req, res, next) => {
   // Technician-relevant statuses
   const technicianStatuses = [
     'Appointment Scheduled',
-    'Appointment Complete',
-    'Inspection In Progress',
-    'Inspection/Diag Complete',
-    'Repair In Progress',
-    'Repair Complete - Awaiting Payment'
+    'In Progress'
   ];
 
   // Check cache first
@@ -1683,11 +1197,7 @@ exports.getTechnicianDashboard = catchAsync(async (req, res, next) => {
 
   const technicianStatuses = [
     'Appointment Scheduled',
-    'Appointment Complete',
-    'Inspection In Progress',
-    'Inspection/Diag Complete',
-    'Repair In Progress',
-    'Repair Complete - Awaiting Payment'
+    'In Progress'
   ];
 
   const workOrders = await applyPopulation(
@@ -1704,10 +1214,7 @@ exports.getTechnicianDashboard = catchAsync(async (req, res, next) => {
   const todaysSchedule = [];
 
   for (const wo of workOrders) {
-    const allAppointments = [
-      ...(wo.appointments || []),
-      ...(wo.appointmentId && wo.appointmentId.startTime ? [wo.appointmentId] : [])
-    ];
+    const allAppointments = wo.appointments || [];
     // Deduplicate by _id
     const seen = new Set();
     for (const appt of allAppointments) {
@@ -1722,7 +1229,7 @@ exports.getTechnicianDashboard = catchAsync(async (req, res, next) => {
           endTime: appt.endTime,
           status: appt.status,
           serviceType: appt.serviceType,
-          vehicle: wo.vehicle,
+          property: wo.property,
           customer: wo.customer,
           workOrderStatus: wo.status,
           priority: wo.priority,
@@ -1736,17 +1243,14 @@ exports.getTechnicianDashboard = catchAsync(async (req, res, next) => {
 
   const stats = {
     total: workOrders.length,
-    inspecting: workOrders.filter(wo => wo.status === 'Inspection In Progress').length,
-    repairing: workOrders.filter(wo => wo.status === 'Repair In Progress').length,
+    inProgress: workOrders.filter(wo => wo.status === 'In Progress').length,
     todayCount: todaysSchedule.length,
     awaitingAction: workOrders.filter(wo =>
-      ['Appointment Complete', 'Appointment Scheduled'].includes(wo.status)
+      ['Appointment Scheduled'].includes(wo.status)
     ).length
   };
 
-  const activeJob = workOrders.find(wo =>
-    wo.status === 'Inspection In Progress' || wo.status === 'Repair In Progress'
-  ) || null;
+  const activeJob = workOrders.find(wo => wo.status === 'In Progress') || null;
 
   const responseData = {
     status: 'success',
@@ -1766,9 +1270,9 @@ exports.getTechnicianDashboard = catchAsync(async (req, res, next) => {
 
 // Get all quotes
 exports.getAllQuotes = catchAsync(async (req, res, next) => {
-  const { customer, vehicle, startDate, endDate, includeArchived } = req.query;
+  const { customer, property, startDate, endDate, includeArchived } = req.query;
 
-  const cacheKey = `quotes:all:${JSON.stringify({ customer, vehicle, startDate, endDate, includeArchived })}`;
+  const cacheKey = `quotes:all:${JSON.stringify({ customer, property, startDate, endDate, includeArchived })}`;
   const cached = cacheService.get(cacheKey);
   if (cached) {
     return res.status(200).json(cached);
@@ -1778,7 +1282,7 @@ exports.getAllQuotes = catchAsync(async (req, res, next) => {
     ? { status: { $in: ['Quote', 'Quote - Archived'] } }
     : { status: 'Quote' };
   if (customer) query.customer = customer;
-  if (vehicle) query.vehicle = vehicle;
+  if (property) query.property = property;
   Object.assign(query, buildDateRangeQuery(startDate, endDate, 'date'));
 
   const quotes = await applyPopulation(
@@ -1799,32 +1303,31 @@ exports.getAllQuotes = catchAsync(async (req, res, next) => {
 
 // Create a new quote
 exports.createQuote = catchAsync(async (req, res, next) => {
-  const vehicle = await validateEntityExists(Vehicle, req.body.vehicle, 'Vehicle');
   const customer = await validateEntityExists(Customer, req.body.customer, 'Customer');
-  validateVehicleOwnership(vehicle, customer);
+
+  // Validate property exists and belongs to customer if provided
+  if (req.body.property) {
+    const property = await Property.findById(req.body.property);
+    if (!property) {
+      return next(new AppError('Property not found', 404));
+    }
+    if (property.customer && property.customer.toString() !== customer._id.toString()) {
+      return next(new AppError('Property does not belong to this customer', 400));
+    }
+  }
 
   let quoteData = { ...req.body };
   quoteData.createdBy = req.user._id;
 
-  // Handle services conversion
+  // Handle services array if provided
   if (!quoteData.services || quoteData.services.length === 0) {
-    if (quoteData.serviceRequested) {
-      if (quoteData.serviceRequested.includes('\n')) {
-        quoteData.services = quoteData.serviceRequested
-          .split('\n')
-          .filter(line => line.trim())
-          .map(line => ({ description: line.trim() }));
-      } else {
-        quoteData.services = [{ description: quoteData.serviceRequested }];
-      }
-    } else {
-      quoteData.services = [];
+    quoteData.services = [];
+  } else if (typeof quoteData.services === 'string') {
+    try {
+      quoteData.services = JSON.parse(quoteData.services);
+    } catch (e) {
+      quoteData.services = [{ description: quoteData.services }];
     }
-  }
-
-  if (Array.isArray(quoteData.services) && quoteData.services.length > 0) {
-    quoteData.serviceRequested = quoteData.services
-      .map(service => service.description).join('\n');
   }
 
   // Force status to Quote
@@ -1832,40 +1335,19 @@ exports.createQuote = catchAsync(async (req, res, next) => {
 
   // Calculate total estimate
   if (!quoteData.totalEstimate) {
-    quoteData.totalEstimate = calculateWorkOrderTotal(quoteData.parts, quoteData.labor, quoteData.servicePackages);
+    quoteData.totalEstimate = calculateWorkOrderTotal(quoteData.materials, quoteData.labor, quoteData.servicePackages);
   }
-
-  // Store notes temporarily
-  const initialNotes = quoteData.diagnosticNotes;
-  delete quoteData.diagnosticNotes;
 
   const newQuote = await WorkOrder.create(quoteData);
 
-  if (initialNotes && initialNotes.trim()) {
-    try {
-      await WorkOrderNote.create({
-        workOrder: newQuote._id,
-        content: initialNotes.trim(),
-        isCustomerFacing: true,
-        createdByName: 'System'
-      });
-    } catch (noteError) {
-      console.error('Error creating note from quote notes:', noteError);
+  // Add to property service history
+  if (quoteData.property) {
+    const property = await Property.findById(quoteData.property);
+    if (property) {
+      property.serviceHistory.push(newQuote._id);
+      await property.save({ validateBeforeSave: false });
     }
   }
-
-  // Add to vehicle service history
-  vehicle.serviceHistory.push(newQuote._id);
-  if (quoteData.currentMileage && !isNaN(parseFloat(quoteData.currentMileage))) {
-    const mileageValue = parseFloat(quoteData.currentMileage);
-    vehicle.mileageHistory.push({
-      date: parseDateOrDefault(quoteData.date),
-      mileage: mileageValue,
-      source: `Quote #${newQuote.id}`
-    });
-    vehicle.currentMileage = mileageValue;
-  }
-  await vehicle.save({ validateBeforeSave: false });
 
   cacheService.invalidateAllWorkOrders();
 
@@ -1879,7 +1361,7 @@ exports.createQuote = catchAsync(async (req, res, next) => {
 exports.convertQuoteToWorkOrder = catchAsync(async (req, res, next) => {
   const quote = await WorkOrder.findById(req.params.id)
     .populate('customer')
-    .populate('vehicle');
+    .populate('property');
 
   if (!quote) {
     return next(new AppError('No quote found with that ID', 404));
@@ -1889,29 +1371,28 @@ exports.convertQuoteToWorkOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('This record is not a quote', 400));
   }
 
-  const { partsToConvert, laborToConvert } = req.body;
-  const isPartialConversion = partsToConvert || laborToConvert;
+  const { materialsToConvert, laborToConvert } = req.body;
+  const isPartialConversion = materialsToConvert || laborToConvert;
 
   if (isPartialConversion) {
-    // Partial conversion: create a new WO with selected items, remove them from the quote
-    const partsToConvertIds = partsToConvert || [];
+    const materialsToConvertIds = materialsToConvert || [];
     const laborToConvertIds = laborToConvert || [];
 
-    const partsToMove = quote.parts.filter(part =>
-      partsToConvertIds.includes(part._id.toString())
+    const materialsToMove = quote.materials.filter(material =>
+      materialsToConvertIds.includes(material._id.toString())
     );
     const laborToMove = quote.labor.filter(labor =>
       laborToConvertIds.includes(labor._id.toString())
     );
 
-    if (partsToMove.length === 0 && laborToMove.length === 0) {
-      return next(new AppError('Must select at least one part or labor item to convert', 400));
+    if (materialsToMove.length === 0 && laborToMove.length === 0) {
+      return next(new AppError('Must select at least one material or labor item to convert', 400));
     }
 
     // Check if converting everything
-    const allPartsSelected = partsToConvertIds.length === quote.parts.length;
+    const allMaterialsSelected = materialsToConvertIds.length === quote.materials.length;
     const allLaborSelected = laborToConvertIds.length === quote.labor.length;
-    const convertingAll = allPartsSelected && allLaborSelected;
+    const convertingAll = allMaterialsSelected && allLaborSelected;
 
     if (convertingAll) {
       // Full conversion on same document
@@ -1936,17 +1417,15 @@ exports.convertQuoteToWorkOrder = catchAsync(async (req, res, next) => {
     // Create new work order with selected items
     const newWorkOrder = new WorkOrder({
       customer: quote.customer._id,
-      vehicle: quote.vehicle ? quote.vehicle._id : null,
-      currentMileage: quote.currentMileage,
+      property: quote.property ? quote.property._id : null,
       date: todayInTz(),
       priority: quote.priority,
       status: 'Work Order Created',
       services: quote.services.map(s => ({ description: s.description })),
-      serviceRequested: quote.serviceRequested,
-      diagnosticNotes: `Converted from Quote #${quote._id.toString().slice(-8).toUpperCase()}`,
-      parts: partsToMove.map(part => {
-        const { _id, ...partData } = part.toObject ? part.toObject() : part;
-        return partData;
+      serviceNotes: `Converted from Quote #${quote._id.toString().slice(-8).toUpperCase()}`,
+      materials: materialsToMove.map(material => {
+        const { _id, ...materialData } = material.toObject ? material.toObject() : material;
+        return materialData;
       }),
       labor: laborToMove.map(labor => ({
         description: labor.description,
@@ -1956,20 +1435,20 @@ exports.convertQuoteToWorkOrder = catchAsync(async (req, res, next) => {
       }))
     });
 
-    newWorkOrder.totalEstimate = calculateWorkOrderTotal(newWorkOrder.parts, newWorkOrder.labor, newWorkOrder.servicePackages);
+    newWorkOrder.totalEstimate = calculateWorkOrderTotal(newWorkOrder.materials, newWorkOrder.labor, newWorkOrder.servicePackages);
     await newWorkOrder.save();
 
     // Remove converted items from quote
-    quote.parts = quote.parts.filter(part =>
-      !partsToConvertIds.includes(part._id.toString())
+    quote.materials = quote.materials.filter(material =>
+      !materialsToConvertIds.includes(material._id.toString())
     );
     quote.labor = quote.labor.filter(labor =>
       !laborToConvertIds.includes(labor._id.toString())
     );
-    quote.totalEstimate = calculateWorkOrderTotal(quote.parts, quote.labor, quote.servicePackages);
+    quote.totalEstimate = calculateWorkOrderTotal(quote.materials, quote.labor, quote.servicePackages);
 
     // Archive quote if nothing remains
-    if (quote.parts.length === 0 && quote.labor.length === 0) {
+    if (quote.materials.length === 0 && quote.labor.length === 0) {
       quote.status = 'Quote - Archived';
     }
 
@@ -2023,34 +1502,32 @@ exports.convertQuoteToWorkOrder = catchAsync(async (req, res, next) => {
 exports.generateQuoteFromWorkOrder = catchAsync(async (req, res, next) => {
   const workOrder = await WorkOrder.findById(req.params.id)
     .populate('customer')
-    .populate('vehicle');
+    .populate('property');
 
   if (!workOrder) {
     return next(new AppError('No work order found with that ID', 404));
   }
 
-  // Determine which parts/labor to copy
-  const { partsToInclude, laborToInclude } = req.body;
-  const partsSource = partsToInclude
-    ? workOrder.parts.filter(p => partsToInclude.includes(p._id.toString()))
-    : workOrder.parts;
+  // Determine which materials/labor to copy
+  const { materialsToInclude, laborToInclude } = req.body;
+  const materialsSource = materialsToInclude
+    ? workOrder.materials.filter(m => materialsToInclude.includes(m._id.toString()))
+    : workOrder.materials;
   const laborSource = laborToInclude
     ? workOrder.labor.filter(l => laborToInclude.includes(l._id.toString()))
     : workOrder.labor;
 
   const newQuote = new WorkOrder({
     customer: workOrder.customer._id,
-    vehicle: workOrder.vehicle ? workOrder.vehicle._id : null,
-    currentMileage: workOrder.currentMileage,
+    property: workOrder.property ? workOrder.property._id : null,
     date: todayInTz(),
     priority: workOrder.priority,
     status: 'Quote',
     services: workOrder.services.map(s => ({ description: s.description })),
-    serviceRequested: workOrder.serviceRequested,
-    diagnosticNotes: `Generated from Work Order #${workOrder._id.toString().slice(-8).toUpperCase()}`,
-    parts: partsSource.map(part => {
-      const { _id, ordered, received, receiptImageUrl, ...partData } = part.toObject ? part.toObject() : part;
-      return partData;
+    serviceNotes: `Generated from Work Order #${workOrder._id.toString().slice(-8).toUpperCase()}`,
+    materials: materialsSource.map(material => {
+      const { _id, ...materialData } = material.toObject ? material.toObject() : material;
+      return materialData;
     }),
     labor: laborSource.map(labor => ({
       description: labor.description,
@@ -2060,7 +1537,7 @@ exports.generateQuoteFromWorkOrder = catchAsync(async (req, res, next) => {
     }))
   });
 
-  newQuote.totalEstimate = calculateWorkOrderTotal(newQuote.parts, newQuote.labor, newQuote.servicePackages);
+  newQuote.totalEstimate = calculateWorkOrderTotal(newQuote.materials, newQuote.labor, newQuote.servicePackages);
   await newQuote.save();
 
   const populatedQuote = await applyPopulation(

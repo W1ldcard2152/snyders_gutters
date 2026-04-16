@@ -27,8 +27,8 @@ router.post('/:id/create-work-order', appointmentController.createWorkOrderFromA
 // Get appointments by customer
 router.get('/customer/:customerId', appointmentController.getCustomerAppointments);
 
-// Get appointments by vehicle
-router.get('/vehicle/:vehicleId', appointmentController.getVehicleAppointments);
+// Get appointments by property
+router.get('/property/:propertyId', appointmentController.getPropertyAppointments);
 
 // Basic CRUD routes
 router

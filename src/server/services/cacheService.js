@@ -181,18 +181,18 @@ const invalidateAllCustomers = () => {
 };
 
 /**
- * Vehicle caching helpers
+ * Property caching helpers
  */
-const getVehicleById = (id) => {
-  return get(`vehicle:${id}`);
+const getPropertyById = (id) => {
+  return get(`property:${id}`);
 };
 
-const setVehicleById = (id, vehicle) => {
-  set(`vehicle:${id}`, vehicle, 600); // 10 minute TTL
+const setPropertyById = (id, property) => {
+  set(`property:${id}`, property, 600); // 10 minute TTL
 };
 
-const invalidateAllVehicles = () => {
-  invalidateByPattern('vehicle');
+const invalidateAllProperties = () => {
+  invalidateByPattern('property');
 };
 
 /**
@@ -225,10 +225,10 @@ module.exports = {
   setCustomerById,
   invalidateAllCustomers,
 
-  // Vehicle caching
-  getVehicleById,
-  setVehicleById,
-  invalidateAllVehicles,
+  // Property caching
+  getPropertyById,
+  setPropertyById,
+  invalidateAllProperties,
 
   // Schedule Block caching
   invalidateAllScheduleBlocks,

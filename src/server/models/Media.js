@@ -7,9 +7,9 @@ const MediaSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'WorkOrder'
     },
-    vehicle: {
+    property: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle'
+      ref: 'Property'
     },
     customer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -17,7 +17,7 @@ const MediaSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ['Pre-Inspection', 'Diagnostic', 'Parts Receipt', 'Post-Inspection', 'Customer Document', 'Other'],
+      enum: ['Pre-Service', 'In-Progress', 'Post-Service', 'Customer Document', 'Other'],
       required: true
     },
     fileUrl: {
@@ -67,7 +67,7 @@ const MediaSchema = new Schema(
 
 // Indexes for faster queries
 MediaSchema.index({ workOrder: 1 });
-MediaSchema.index({ vehicle: 1 });
+MediaSchema.index({ property: 1 });
 MediaSchema.index({ customer: 1 });
 MediaSchema.index({ type: 1 });
 MediaSchema.index({ createdAt: 1 });

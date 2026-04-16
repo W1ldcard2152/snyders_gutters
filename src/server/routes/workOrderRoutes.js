@@ -43,11 +43,11 @@ router.get('/status/:status', workOrderController.getWorkOrdersByStatus);
 // Update work order status (office staff or own assigned WO)
 router.patch('/:id/status', restrictToOwnWorkOrder('admin', 'management', 'service-writer'), workOrderController.updateStatus);
 
-// Add part to work order (office staff only)
-router.post('/:id/parts', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.addPart);
+// Add material to work order (office staff only)
+router.post('/:id/materials', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.addMaterial);
 
-// Add part from inventory to work order (deducts inventory QOH)
-router.post('/:id/parts/from-inventory', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.addPartFromInventory);
+// Add material from inventory to work order (deducts inventory QOH)
+router.post('/:id/materials/from-inventory', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.addMaterialFromInventory);
 
 // Service packages on work orders (draft → commit → remove)
 router.post('/:id/service-package', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.addServicePackage);
@@ -56,15 +56,6 @@ router.post('/:id/remove-service-package', authController.restrictTo('admin', 'm
 
 // Add labor to work order (office staff or own assigned WO)
 router.post('/:id/labor', restrictToOwnWorkOrder('admin', 'management', 'service-writer'), workOrderController.addLabor);
-
-// Receipt import: Step 1 - extract parts from receipt (office staff only)
-router.post('/:id/extract-receipt', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.receiptUpload, workOrderController.extractReceipt);
-
-// Receipt import: Step 2 - confirm and add selected parts (office staff only)
-router.post('/:id/confirm-receipt-parts', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.confirmReceiptParts);
-
-// Get signed URL for receipt image (office staff only)
-router.get('/receipt-signed-url', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.getReceiptSignedUrl);
 
 // Generate invoice (office staff only)
 router.get('/:id/invoice', authController.restrictTo('admin', 'management', 'service-writer'), workOrderController.generateInvoice);

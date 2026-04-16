@@ -1,7 +1,7 @@
 {
-  "name": "auto-repair-crm",
+  "name": "snyder-gutters-crm",
   "version": "1.0.0",
-  "description": "CRM system for auto repair shop",
+  "description": "CRM for Snyder's Gutters & Pressure Washing Services",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

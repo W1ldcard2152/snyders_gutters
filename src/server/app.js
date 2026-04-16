@@ -24,7 +24,7 @@ const convertDates = require('./middleware/convertDates');
 // Import routes
 const oauthRoutes = require('./routes/oauthRoutes');
 const customerRoutes = require('./routes/customerRoutes');
-const vehicleRoutes = require('./routes/vehicleRoutes');
+const propertyRoutes = require('./routes/propertyRoutes');
 const workOrderRoutes = require('./routes/workOrderRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
@@ -32,9 +32,6 @@ const invoiceRoutes = require('./routes/invoiceRoutes');
 const authRoutes = require('./routes/authRoutes');
 const technicianRoutes = require('./routes/technicianRoutes'); // Import technician routes
 const feedbackRoutes = require('./routes/feedbackRoutes'); // Import feedback routes
-const partRoutes = require('./routes/partRoutes'); // Import part routes
-const vinRoutes = require('./routes/vinRoutes'); // Import VIN routes
-const registrationRoutes = require('./routes/registrationRoutes'); // Import registration routes
 const searchRoutes = require('./routes/searchRoutes'); // Import search routes
 const customerInteractionRoutes = require('./routes/customerInteractionRoutes'); // Import customer interaction routes
 const workOrderNotesRoutes = require('./routes/workOrderNotesRoutes'); // Import work order notes routes
@@ -42,7 +39,6 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const scheduleBlockRoutes = require('./routes/scheduleBlockRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const servicePackageRoutes = require('./routes/servicePackageRoutes');
-const aiRoutes = require('./routes/aiRoutes');
 
 // Initialize Express app
 const app = express();
@@ -139,7 +135,7 @@ app.use(passport.initialize());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: process.env.CLIENT_URL || 'http://localhost:3004',
   credentials: true
 }));
 
@@ -152,16 +148,13 @@ app.use('/api/auth', oauthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', authRoutes);
 app.use('/api/customers', customerRoutes);
-app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/properties', propertyRoutes);
 app.use('/api/workorders', workOrderRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/technicians', technicianRoutes); // Use technician routes
 app.use('/api/feedback', feedbackRoutes); // Use feedback routes
-app.use('/api/parts', partRoutes); // Use part routes
-app.use('/api/vin', vinRoutes); // Use VIN routes
-app.use('/api/registration', registrationRoutes); // Use registration routes
 app.use('/api/search', searchRoutes); // Use search routes
 app.use('/api/interactions', customerInteractionRoutes); // Use customer interaction routes
 app.use('/api/workorder-notes', workOrderNotesRoutes); // Use work order notes routes
@@ -169,7 +162,6 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/schedule-blocks', scheduleBlockRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/service-packages', servicePackageRoutes);
-app.use('/api/ai', aiRoutes);
 const followUpRoutes = require('./routes/followUpRoutes');
 app.use('/api/follow-ups', followUpRoutes);
 
@@ -187,7 +179,7 @@ if (process.env.NODE_ENV === 'production') {
   app.get('/', (req, res) => {
   res.status(200).json({
     status: 'success',
-    message: 'Auto Repair CRM API is running'
+    message: "Snyder's Gutters CRM API is running"
   });
 });
 } // Add missing closing brace for the else block

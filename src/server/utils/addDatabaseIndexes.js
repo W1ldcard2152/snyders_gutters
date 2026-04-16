@@ -29,8 +29,8 @@ const addIndexes = async () => {
     await workOrdersCollection.createIndex({ customer: 1 });
     console.log('✓ Created index on workorders.customer');
 
-    await workOrdersCollection.createIndex({ vehicle: 1 });
-    console.log('✓ Created index on workorders.vehicle');
+    await workOrdersCollection.createIndex({ property: 1 });
+    console.log('✓ Created index on workorders.property');
 
     await workOrdersCollection.createIndex({ date: -1 });
     console.log('✓ Created index on workorders.date (descending)');
@@ -44,8 +44,8 @@ const addIndexes = async () => {
 
     // Text index for search
     await workOrdersCollection.createIndex({
-      serviceRequested: 'text',
-      diagnosticNotes: 'text',
+      serviceNotes: 'text',
+      completionNotes: 'text',
       'services.description': 'text'
     });
     console.log('✓ Created text index on workorders for full-text search');
@@ -98,27 +98,26 @@ const addIndexes = async () => {
     });
     console.log('✓ Created text index on customers for full-text search');
 
-    // Vehicles Collection Indexes
-    console.log('\n=== Adding Vehicles indexes ===');
-    const vehiclesCollection = db.collection('vehicles');
+    // Properties Collection Indexes
+    console.log('\n=== Adding Properties indexes ===');
+    const propertiesCollection = db.collection('properties');
 
-    await vehiclesCollection.createIndex({ customer: 1 });
-    console.log('✓ Created index on vehicles.customer');
+    await propertiesCollection.createIndex({ customer: 1 });
+    console.log('✓ Created index on properties.customer');
 
-    await vehiclesCollection.createIndex({ vin: 1 });
-    console.log('✓ Created index on vehicles.vin');
+    await propertiesCollection.createIndex({ 'address.zip': 1 });
+    console.log('✓ Created index on properties.address.zip');
 
-    await vehiclesCollection.createIndex({ licensePlate: 1 });
-    console.log('✓ Created index on vehicles.licensePlate');
+    await propertiesCollection.createIndex({ 'address.city': 1 });
+    console.log('✓ Created index on properties.address.city');
 
-    // Text index for vehicle search
-    await vehiclesCollection.createIndex({
-      make: 'text',
-      model: 'text',
-      vin: 'text',
-      licensePlate: 'text'
+    // Text index for property search
+    await propertiesCollection.createIndex({
+      'address.street': 'text',
+      'address.city': 'text',
+      'address.zip': 'text'
     });
-    console.log('✓ Created text index on vehicles for full-text search');
+    console.log('✓ Created text index on properties for full-text search');
 
     // Users Collection Indexes
     console.log('\n=== Adding Users indexes ===');
@@ -150,8 +149,8 @@ const addIndexes = async () => {
     await mediaCollection.createIndex({ workOrder: 1 });
     console.log('✓ Created index on media.workOrder');
 
-    await mediaCollection.createIndex({ vehicle: 1 });
-    console.log('✓ Created index on media.vehicle');
+    await mediaCollection.createIndex({ property: 1 });
+    console.log('✓ Created index on media.property');
 
     await mediaCollection.createIndex({ customer: 1 });
     console.log('✓ Created index on media.customer');

@@ -1,4 +1,4 @@
-// PWA Utility Functions for Phoenix CRM
+// PWA Utility Functions for Snyder's Gutters CRM
 
 /**
  * Check if the app is running as a PWA (installed)

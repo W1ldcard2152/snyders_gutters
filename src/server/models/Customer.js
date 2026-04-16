@@ -25,9 +25,9 @@ const CustomerSchema = new Schema(
       state: { type: String, trim: true },
       zip: { type: String, trim: true }
     },
-    vehicles: [{ 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Vehicle' 
+    properties: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Property'
     }],
     communicationPreference: {
       type: String,
@@ -55,12 +55,12 @@ CustomerSchema.virtual('fullAddress').get(function() {
   return [street, city, state, zip].filter(Boolean).join(', ');
 });
 
-// Method to get customer's most recent vehicle
-CustomerSchema.methods.getMostRecentVehicle = async function() {
-  if (!this.vehicles.length) return null;
-  
-  return this.model('Vehicle')
-    .findOne({ _id: { $in: this.vehicles } })
+// Method to get customer's most recent property
+CustomerSchema.methods.getMostRecentProperty = async function() {
+  if (!this.properties.length) return null;
+
+  return this.model('Property')
+    .findOne({ _id: { $in: this.properties } })
     .sort({ createdAt: -1 });
 };
 

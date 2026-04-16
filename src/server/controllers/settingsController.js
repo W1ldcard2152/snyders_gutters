@@ -12,11 +12,11 @@ exports.getSettings = catchAsync(async (req, res) => {
 
 exports.updateSettings = catchAsync(async (req, res) => {
   const settings = await Settings.getSettings();
-  const oldMarkup = settings.partMarkupPercentage;
+  const oldMarkup = settings.supplyMarkupPercentage;
 
   // Update allowed fields
-  if (req.body.partMarkupPercentage !== undefined) {
-    settings.partMarkupPercentage = req.body.partMarkupPercentage;
+  if (req.body.supplyMarkupPercentage !== undefined) {
+    settings.supplyMarkupPercentage = req.body.supplyMarkupPercentage;
   }
   if (req.body.customVendors !== undefined) {
     settings.customVendors = req.body.customVendors;
@@ -34,18 +34,18 @@ exports.updateSettings = catchAsync(async (req, res) => {
   await settings.save();
 
   // If markup changed, batch-recalculate retail prices on all WOs/quotes without a saved invoice
-  if (req.body.partMarkupPercentage !== undefined && req.body.partMarkupPercentage !== oldMarkup) {
-    const newMultiplier = 1 + settings.partMarkupPercentage / 100;
+  if (req.body.supplyMarkupPercentage !== undefined && req.body.supplyMarkupPercentage !== oldMarkup) {
+    const newMultiplier = 1 + settings.supplyMarkupPercentage / 100;
 
     // Find all work orders (including quotes) that don't have a linked invoice
     const workOrders = await WorkOrder.find({
       invoice: { $exists: false }
-    }).select('parts');
+    }).select('materials');
 
     // Also find ones where invoice is explicitly null
     const workOrdersNull = await WorkOrder.find({
       invoice: null
-    }).select('parts');
+    }).select('materials');
 
     // Combine and deduplicate
     const allIds = new Set();
@@ -60,25 +60,25 @@ exports.updateSettings = catchAsync(async (req, res) => {
 
     const bulkOps = [];
     for (const wo of allWorkOrders) {
-      if (!wo.parts || wo.parts.length === 0) continue;
+      if (!wo.materials || wo.materials.length === 0) continue;
 
       let changed = false;
-      const updatedParts = wo.parts.map(part => {
-        if (part.cost > 0) {
-          const newPrice = parseFloat((part.cost * newMultiplier).toFixed(2));
-          if (newPrice !== part.price) {
+      const updatedMaterials = wo.materials.map(material => {
+        if (material.cost > 0) {
+          const newPrice = parseFloat((material.cost * newMultiplier).toFixed(2));
+          if (newPrice !== material.price) {
             changed = true;
-            return { ...part.toObject(), price: newPrice };
+            return { ...material.toObject(), price: newPrice };
           }
         }
-        return part.toObject();
+        return material.toObject();
       });
 
       if (changed) {
         bulkOps.push({
           updateOne: {
             filter: { _id: wo._id },
-            update: { $set: { parts: updatedParts } }
+            update: { $set: { materials: updatedMaterials } }
           }
         });
       }
@@ -91,7 +91,7 @@ exports.updateSettings = catchAsync(async (req, res) => {
     res.status(200).json({
       status: 'success',
       data: { settings },
-      message: `Markup updated to ${settings.partMarkupPercentage}%. Recalculated prices on ${bulkOps.length} work orders/quotes.`
+      message: `Markup updated to ${settings.supplyMarkupPercentage}%. Recalculated prices on ${bulkOps.length} work orders/quotes.`
     });
   } else {
     res.status(200).json({
@@ -102,7 +102,7 @@ exports.updateSettings = catchAsync(async (req, res) => {
 });
 
 exports.addVendor = catchAsync(async (req, res) => {
-  const { vendor, hostname } = req.body;
+  const { vendor } = req.body;
   if (!vendor || !vendor.trim()) {
     return res.status(400).json({ status: 'fail', message: 'Vendor name is required' });
   }
@@ -118,15 +118,6 @@ exports.addVendor = catchAsync(async (req, res) => {
   }
 
   settings.customVendors.push(trimmed);
-
-  // Store hostname mapping for URL auto-detection
-  if (hostname && hostname.trim()) {
-    const cleanHostname = hostname.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
-    // Remove existing mapping for this hostname if any, then add
-    settings.vendorHostnames = settings.vendorHostnames.filter(h => h.hostname !== cleanHostname);
-    settings.vendorHostnames.push({ hostname: cleanHostname, vendor: trimmed });
-  }
-
   await settings.save();
 
   res.status(200).json({ status: 'success', data: { settings } });
@@ -140,10 +131,6 @@ exports.removeVendor = catchAsync(async (req, res) => {
 
   const settings = await Settings.getSettings();
   settings.customVendors = settings.customVendors.filter(v => v !== vendor);
-
-  // Also remove any hostname mappings for this vendor
-  settings.vendorHostnames = settings.vendorHostnames.filter(h => h.vendor !== vendor);
-
   await settings.save();
 
   res.status(200).json({ status: 'success', data: { settings } });
