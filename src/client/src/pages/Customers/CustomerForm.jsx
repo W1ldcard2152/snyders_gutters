@@ -272,7 +272,7 @@ const CustomerForm = () => {
         title="Customer Created Successfully!"
         actions={[
           {
-            label: 'Yes (Add New Vehicle)',
+            label: 'Yes (Add New Property)',
             variant: 'primary',
             onClick: () => {
               navigate(`/properties/new?customer=${newCustomerId}`);
@@ -289,7 +289,7 @@ const CustomerForm = () => {
           }
         ]}
       >
-        <p className="text-gray-700">Would you like to add a vehicle for this new customer?</p>
+        <p className="text-gray-700">Would you like to add a property for this new customer?</p>
       </Modal>
 
       {error && (

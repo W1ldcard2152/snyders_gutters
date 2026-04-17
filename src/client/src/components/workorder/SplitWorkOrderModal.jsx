@@ -41,11 +41,11 @@ const SplitWorkOrderModal = ({
   };
 
   const calculateSelectedTotals = () => {
-    const partsTotal = workOrder.parts
+    const partsTotal = (workOrder.materials || workOrder.parts || [])
       .filter(part => selectedParts.includes(part._id))
       .reduce((total, part) => total + (part.price * part.quantity), 0);
-    
-    const laborTotal = workOrder.labor
+
+    const laborTotal = (workOrder.labor || [])
       .filter(labor => selectedLabor.includes(labor._id))
       .reduce((total, labor) => {
         const qty = labor.quantity || labor.hours || 0;
@@ -56,11 +56,11 @@ const SplitWorkOrderModal = ({
   };
 
   const calculateRemainingTotals = () => {
-    const partsTotal = workOrder.parts
+    const partsTotal = (workOrder.materials || workOrder.parts || [])
       .filter(part => !selectedParts.includes(part._id))
       .reduce((total, part) => total + (part.price * part.quantity), 0);
 
-    const laborTotal = workOrder.labor
+    const laborTotal = (workOrder.labor || [])
       .filter(labor => !selectedLabor.includes(labor._id))
       .reduce((total, labor) => {
         const qty = labor.quantity || labor.hours || 0;
@@ -116,13 +116,13 @@ const SplitWorkOrderModal = ({
         </div>
 
         {/* Parts Selection */}
-        {workOrder.parts && workOrder.parts.length > 0 && (
+        {(workOrder.materials || workOrder.parts || []).length > 0 && (
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-3">
-              Select Parts to Move
+              Select Materials to Move
             </h3>
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {workOrder.parts.map((part) => (
+              {(workOrder.materials || workOrder.parts || []).map((part) => (
                 <div
                   key={part._id}
                   className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -216,7 +216,7 @@ const SplitWorkOrderModal = ({
             <div className="bg-blue-50 p-3 rounded-lg">
               <h4 className="font-medium text-gray-900 mb-2">New Work Order Total</h4>
               <p className="text-sm text-gray-600">
-                Parts: {formatCurrency(selectedTotals.partsTotal)}
+                Materials: {formatCurrency(selectedTotals.partsTotal)}
               </p>
               <p className="text-sm text-gray-600">
                 Labor: {formatCurrency(selectedTotals.laborTotal)}
@@ -228,7 +228,7 @@ const SplitWorkOrderModal = ({
             <div className="bg-gray-50 p-3 rounded-lg">
               <h4 className="font-medium text-gray-900 mb-2">Remaining on Original</h4>
               <p className="text-sm text-gray-600">
-                Parts: {formatCurrency(remainingTotals.partsTotal)}
+                Materials: {formatCurrency(remainingTotals.partsTotal)}
               </p>
               <p className="text-sm text-gray-600">
                 Labor: {formatCurrency(remainingTotals.laborTotal)}

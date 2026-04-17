@@ -20,10 +20,10 @@ import { isAdminOrManagement } from '../../utils/permissions';
 
 const AppointmentSchema = Yup.object().shape({
   customer: Yup.string().required('Customer is required'),
-  vehicle: Yup.string().when('workOrder', {
-    is: (workOrder) => !workOrder || workOrder.trim() === '', // If workOrder is null, undefined, or empty string (standalone)
-    then: (schema) => schema.notRequired(), // Then vehicle is NOT required
-    otherwise: (schema) => schema.required('Vehicle is required'), // Otherwise (work order attached), vehicle IS required
+  property: Yup.string().when('workOrder', {
+    is: (workOrder) => !workOrder || workOrder.trim() === '',
+    then: (schema) => schema.notRequired(),
+    otherwise: (schema) => schema.required('Property is required'),
   }),
   serviceType: Yup.string().required('Service type is required'),
   startDate: Yup.string().required('Start date is required'),
@@ -61,7 +61,7 @@ const AppointmentForm = () => {
 
   const [initialValues, setInitialValues] = useState({
     customer: '',
-    vehicle: '',
+    property: '',
     serviceType: '',
     serviceTypeCustom: '', // For "Other" option
     details: '',
@@ -102,13 +102,13 @@ const AppointmentForm = () => {
     }
     try {
       const response = await CustomerService.getCustomerVehicles(customerId);
-      const fetchedVehicles = response.data.vehicles || [];
+      const fetchedVehicles = response.data.properties || response.data.vehicles || [];
       setVehicles(fetchedVehicles);
       console.log('fetchVehiclesForCustomer - fetched:', fetchedVehicles);
       return fetchedVehicles;
     } catch (err) {
       console.error('Error fetching vehicles:', err);
-      setError('Failed to load vehicles.');
+      setError('Failed to load properties.');
       setVehicles([]);
       return [];
     }
@@ -118,7 +118,7 @@ const AppointmentForm = () => {
     // Get params inside useEffect, using the searchParams object from the hook
     const workOrderIdFromEffect = searchParams.get('workOrder');
     const customerIdFromEffect = searchParams.get('customer');
-    const vehicleIdFromEffect = searchParams.get('vehicle');
+    const vehicleIdFromEffect = searchParams.get('property') || searchParams.get('vehicle');
 
     console.log('useEffect[loadInitialData] - START - Params from hook inside effect:', { 
       id, 
@@ -146,7 +146,7 @@ const AppointmentForm = () => {
         // Default initial values based on current date/time
         let currentInitialValues = {
             customer: '',
-            vehicle: '',
+            property: '',
             serviceType: '',
             details: '',
             startDate: formatDateForField(nowET), // Use nowET defined in effect
@@ -176,7 +176,7 @@ const AppointmentForm = () => {
           currentInitialValues = {
             ...currentInitialValues, // Keep date/time defaults unless overwritten
             customer: apptCustomerId || '',
-            vehicle: appt.vehicle?._id || appt.vehicle || '',
+            property: appt.property?._id || appt.property || appt.vehicle?._id || appt.vehicle || '',
             serviceType: appt.serviceType || '',
             details: appt.details || '',
             startDate: formatDateForField(isReschedule ? nowET : moment.utc(appt.startTime).tz(TIMEZONE)),
@@ -198,16 +198,16 @@ const AppointmentForm = () => {
           const wo = woResponse.data.workOrder;
           setWorkOrderContext(wo);
           const woCustomerId = wo.customer?._id || wo.customer;
-          const woVehicleId = wo.vehicle?._id || wo.vehicle;
+          const woPropertyId = wo.property?._id || wo.property || wo.vehicle?._id || wo.vehicle;
 
           if (woCustomerId) {
-            await fetchVehiclesForCustomer(woCustomerId); 
+            await fetchVehiclesForCustomer(woCustomerId);
           }
-          
+
           currentInitialValues = {
             ...currentInitialValues, // Keep date/time defaults
             customer: woCustomerId || '',
-            vehicle: woVehicleId || '',
+            property: woPropertyId || '',
             serviceType: wo.services?.map(s => s.description).join(', ') || wo.serviceRequested || '',
             notes: wo.diagnosticNotes || '',
             workOrder: wo._id,
@@ -219,7 +219,7 @@ const AppointmentForm = () => {
             currentInitialValues = {
                 ...currentInitialValues, // Keep date/time defaults
                 customer: customerIdFromEffect,
-                vehicle: vehicleIdFromEffect || '', 
+                property: vehicleIdFromEffect || '',
             };
         } else {
              console.log('useEffect - New blank appointment.');
@@ -243,13 +243,12 @@ const AppointmentForm = () => {
   const handleCustomerChange = async (e, setFieldValue) => {
     const customerId = e.target.value;
     setFieldValue('customer', customerId);
-    setFieldValue('vehicle', '');
+    setFieldValue('property', '');
 
     if (customerId) {
       const fetchedVehicles = await fetchVehiclesForCustomer(customerId);
-      // Auto-select first vehicle if available
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        setFieldValue('vehicle', fetchedVehicles[0]._id);
+        setFieldValue('property', fetchedVehicles[0]._id);
       }
     }
   };
@@ -384,7 +383,10 @@ const AppointmentForm = () => {
   const customerOptions = customers
     .map(c => ({ value: c._id, label: c.name }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const vehicleOptions = vehicles.map(v => ({ value: v._id, label: `${v.year} ${v.make} ${v.model} ${v.licensePlate ? `(${v.licensePlate})` : ''}` }));
+  const vehicleOptions = vehicles.map(v => ({
+    value: v._id,
+    label: v.address?.street || (typeof v.address === 'string' && v.address) || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim() || 'Unknown Property'
+  }));
   const statusOptions = [
     { value: 'Scheduled', label: 'Scheduled' },
     { value: 'Confirmed', label: 'Confirmed' },
@@ -451,7 +453,7 @@ const AppointmentForm = () => {
                   <SelectInput label="Customer" name="customer" options={[{ value: '', label: 'Select Customer'}, ...customerOptions]} value={values.customer} onChange={(e) => handleCustomerChange(e, setFieldValue)} onBlur={handleBlur} error={errors.customer} touched={touched.customer} disabled={!!workOrderContext} required />
                 </div>
                 <div>
-                  <SelectInput label="Vehicle" name="vehicle" options={[{ value: '', label: 'Select Vehicle'}, ...vehicleOptions]} value={values.vehicle} onChange={handleChange} onBlur={handleBlur} error={errors.vehicle} touched={touched.vehicle} disabled={!values.customer || !!workOrderContext || vehicles.length === 0} required={!!values.workOrder} />
+                  <SelectInput label="Property" name="property" options={[{ value: '', label: vehicles.length === 0 && values.customer ? 'No properties found — add one via Quick Entry' : 'Select Property'}, ...vehicleOptions]} value={values.property} onChange={handleChange} onBlur={handleBlur} error={errors.property} touched={touched.property} disabled={!values.customer} required={!!values.workOrder} />
                 </div>
                 <div className="md:col-span-2">
                   <SelectInput
@@ -459,10 +461,12 @@ const AppointmentForm = () => {
                     name="serviceType"
                     options={[
                       { value: '', label: 'Select Service Type' },
-                      { value: 'Inspection', label: 'Inspection' },
+                      { value: 'Consultation', label: 'Consultation' },
+                      { value: 'New Installation', label: 'New Installation' },
                       { value: 'Repair', label: 'Repair' },
-                      { value: 'Diagnostic Work', label: 'Diagnostic Work' },
-                      { value: 'Road Test', label: 'Road Test' },
+                      { value: 'Cleaning', label: 'Cleaning' },
+                      { value: 'Inspection', label: 'Inspection' },
+                      { value: 'Estimate', label: 'Estimate' },
                       { value: 'Other', label: 'Other' }
                     ]}
                     value={values.serviceType}

@@ -126,8 +126,8 @@ const WorkOrderDetail = () => {
   
   // Get unique vendors from parts
   const getUniqueVendors = () => {
-    if (!workOrder?.parts) return [];
-    const vendors = [...new Set(workOrder.parts.map(part => part.vendor).filter(vendor => vendor && vendor.trim() !== ''))];
+    if (!workOrder?.materials && !workOrder?.parts) return [];
+    const vendors = [...new Set((workOrder.materials || workOrder.parts || []).map(part => part.vendor).filter(vendor => vendor && vendor.trim() !== ''))];
     return vendors.sort();
   };
   
@@ -169,7 +169,7 @@ const WorkOrderDetail = () => {
     try {
       let updatedCount = 0;
 
-      const updatedParts = workOrder.parts.map(part => {
+      const updatedParts = (workOrder.materials || workOrder.parts || []).map(part => {
         if (part.vendor === bulkOrderData.vendor) {
           updatedCount++;
           return {
@@ -440,10 +440,10 @@ const WorkOrderDetail = () => {
 
     // Special handling for "Parts Ordered" status - mark all parts as ordered
     if (newStatus === 'Parts Ordered') {
-      const partsCount = workOrder.parts?.length || 0;
+      const partsCount = (workOrder.materials || workOrder.parts || []).length;
 
       if (partsCount > 0) {
-        const unorderedParts = workOrder.parts.filter(part => !part.ordered);
+        const unorderedParts = (workOrder.materials || workOrder.parts || []).filter(part => !part.ordered);
         const unorderedCount = unorderedParts.length;
 
         if (unorderedCount > 0) {
@@ -468,10 +468,10 @@ const WorkOrderDetail = () => {
 
     // Special handling for "Parts Received" status
     if (newStatus === 'Parts Received') {
-      const partsCount = workOrder.parts?.length || 0;
-      
+      const partsCount = (workOrder.materials || workOrder.parts || []).length;
+
       if (partsCount > 0) {
-        const unreceivedParts = workOrder.parts.filter(part => !part.received);
+        const unreceivedParts = (workOrder.materials || workOrder.parts || []).filter(part => !part.received);
         const unreceivedCount = unreceivedParts.length;
         
         let confirmMessage = `Changing status to "Parts Received" will automatically mark ALL ${partsCount} parts as received.\n\n`;
@@ -723,7 +723,7 @@ const WorkOrderDetail = () => {
   const handleEditPart = async () => {
     try {
       // Create updated parts array with the edited part
-      const updatedParts = [...workOrder.parts];
+      const updatedParts = [...(workOrder.materials || workOrder.parts || [])];
       updatedParts[editingPart.index] = {
         ...updatedParts[editingPart.index],
         ...newPart
@@ -758,7 +758,7 @@ const WorkOrderDetail = () => {
 
   const handleRemovePart = async (index) => {
     try {
-      const updatedParts = workOrder.parts.filter((_, idx) => idx !== index);
+      const updatedParts = (workOrder.materials || workOrder.parts || []).filter((_, idx) => idx !== index);
 
       const response = await WorkOrderService.updateWorkOrder(id, { parts: updatedParts });
       setWorkOrder(response.data.workOrder);
@@ -829,7 +829,7 @@ const WorkOrderDetail = () => {
 
   const handlePartStatusChange = async (partIndex, field, value) => {
     try {
-      const updatedParts = [...workOrder.parts];
+      const updatedParts = [...(workOrder.materials || workOrder.parts || [])];
 
       // Update the specific field
       updatedParts[partIndex] = {
@@ -918,11 +918,10 @@ const WorkOrderDetail = () => {
     documentDate: workOrder.createdAt,
     status: workOrder.status,
     customer: workOrder.customer,
-    vehicle: workOrder.vehicle,
-    vehicleMileage: workOrder.vehicleMileage,
+    vehicle: property,
     serviceRequested: workOrder.serviceRequested,
     diagnosticNotes: workOrder.diagnosticNotes,
-    parts: workOrder.parts || [],
+    parts: materials,
     labor: workOrder.labor || [],
     customerFacingNotes: notes.filter(n => n.isCustomerFacing),
     technicianName: getCustomerFacingName(workOrder.assignedTechnician),
@@ -944,8 +943,8 @@ const WorkOrderDetail = () => {
       const html = generateDocumentHtml('workorder', getDocumentData());
       const filename = generatePdfFilename(
         workOrder.customer?.name,
-        workOrder.vehicle?.make,
-        workOrder.vehicle?.model
+        property?.address?.street || property?.address || '',
+        ''
       );
       await generatePdfFromHtml(html, filename);
     } catch (err) {
@@ -1023,8 +1022,12 @@ const WorkOrderDetail = () => {
     );
   }
 
+  // Aliases for renamed model fields
+  const materials = workOrder.materials || workOrder.parts || [];
+  const property = workOrder.property || workOrder.vehicle;
+
   // Calculate totals
-  const partsCost = workOrder.parts.reduce((total, part) => {
+  const partsCost = materials.reduce((total, part) => {
     return total + (part.price * part.quantity);
   }, 0);
   
@@ -1096,7 +1099,7 @@ const WorkOrderDetail = () => {
                   <button
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                     onClick={() => { setSplitModalOpen(true); setMoreActionsOpen(false); }}
-                    disabled={(!workOrder.parts || workOrder.parts.length === 0) && (!workOrder.labor || workOrder.labor.length === 0)}
+                    disabled={!materials.length && (!workOrder.labor || workOrder.labor.length === 0)}
                   >
                     <i className="fas fa-code-branch mr-2"></i>Split Work Order
                   </button>
@@ -1122,7 +1125,7 @@ const WorkOrderDetail = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <Card title="Customer & Vehicle">
+        <Card title="Customer & Property">
           <div className="space-y-2">
             <div>
               <p className="text-sm text-gray-500">Customer</p>
@@ -1144,22 +1147,19 @@ const WorkOrderDetail = () => {
               )}
             </div>
             <div className="pt-2">
-              <p className="text-sm text-gray-500">Vehicle</p>
-              {workOrder.vehicle?._id ? (
+              <p className="text-sm text-gray-500">Property</p>
+              {property?._id ? (
                 <Link
-                  to={`/properties/${workOrder.vehicle._id}`}
+                  to={`/properties/${property._id}`}
                   className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
                 >
-                  {workOrder.vehicle.year} {workOrder.vehicle.make} {workOrder.vehicle.model}
+                  {property.address?.street || (typeof property.address === 'string' && property.address) || `${property.year || ''} ${property.make || ''} ${property.model || ''}`.trim() || 'Property'}
                 </Link>
               ) : (
-                <p className="font-medium text-gray-400">No Vehicle Assigned</p>
+                <p className="font-medium text-gray-400">No Property Assigned</p>
               )}
-              {workOrder.vehicle?.vin && (
-                <p className="text-sm text-gray-600">VIN: {workOrder.vehicle.vin}</p>
-              )}
-              {workOrder.vehicle?.licensePlate && (
-                <p className="text-sm text-gray-600">License: {workOrder.vehicle.licensePlate}</p>
+              {property?.address?.city && (
+                <p className="text-sm text-gray-600">{property.address.city}{property.address.state ? `, ${property.address.state}` : ''}</p>
               )}
             </div>
             <div className="pt-2">
@@ -1399,7 +1399,7 @@ const WorkOrderDetail = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const targetUrl = `/appointments/new?workOrder=${workOrder._id}&vehicle=${workOrder.vehicle?._id}`;
+                    const targetUrl = `/appointments/new?workOrder=${workOrder._id}&property=${property?._id}`;
                     console.log('Navigating to AppointmentForm with URL:', targetUrl);
                     navigate(targetUrl);
                   }}
@@ -1702,9 +1702,9 @@ const WorkOrderDetail = () => {
             </div>
           }
         >
-          {workOrder.parts.length === 0 ? (
+          {materials.length === 0 ? (
             <div className="text-center py-6 text-gray-500">
-              <p>No parts added.</p>
+              <p>No materials added.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1712,7 +1712,7 @@ const WorkOrderDetail = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Part
+                      Material
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Qty
@@ -1735,7 +1735,7 @@ const WorkOrderDetail = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {workOrder.parts
+                  {materials
                     .map((part, originalIndex) => ({ ...part, originalIndex }))
                     .sort((a, b) => {
                       // Sort by vendor alphabetically, with empty vendors at the end
@@ -1969,7 +1969,7 @@ const WorkOrderDetail = () => {
               <FileUpload
                 onFileUpload={handleFileUpload}
                 workOrderId={workOrder._id}
-                vehicleId={workOrder.vehicle?._id}
+                vehicleId={property?._id}
                 customerId={workOrder.customer?._id}
                 accept=".pdf,.jpg,.jpeg,.png,.gif,.txt,.doc,.docx,.xls,.xlsx"
               />
@@ -2382,7 +2382,7 @@ const WorkOrderDetail = () => {
                 >
                   <option value="">Select a vendor...</option>
                   {getUniqueVendors().map(vendor => {
-                    const partsCount = workOrder.parts.filter(part => part.vendor === vendor).length;
+                    const partsCount = (workOrder.materials || workOrder.parts || []).filter(part => part.vendor === vendor).length;
                     return (
                       <option key={vendor} value={vendor}>
                         {vendor} ({partsCount} part{partsCount !== 1 ? 's' : ''})
@@ -2407,7 +2407,7 @@ const WorkOrderDetail = () => {
                 <div className="bg-blue-50 p-3 rounded-md">
                   <p className="text-sm text-blue-800">
                     This will update the order number for all parts from <strong>{bulkOrderData.vendor}</strong> 
-                    ({workOrder.parts.filter(part => part.vendor === bulkOrderData.vendor).length} part{workOrder.parts.filter(part => part.vendor === bulkOrderData.vendor).length !== 1 ? 's' : ''}).
+                    ({(workOrder.materials || workOrder.parts || []).filter(part => part.vendor === bulkOrderData.vendor).length} part{(workOrder.materials || workOrder.parts || []).filter(part => part.vendor === bulkOrderData.vendor).length !== 1 ? 's' : ''}).
                   </p>
                 </div>
               )}

@@ -305,7 +305,7 @@ const VehicleForm = () => {
     <div className="container mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">
-          {id ? 'Edit Vehicle' : 'Add New Vehicle'}
+          {id ? 'Edit Property' : 'Add New Property'}
         </h1>
       </div>
 
@@ -706,7 +706,7 @@ const VehicleForm = () => {
                   variant="primary"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Vehicle'}
+                  {isSubmitting ? 'Saving...' : 'Save Property'}
                 </Button>
               </div>
             </Form>

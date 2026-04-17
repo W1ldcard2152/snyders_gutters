@@ -392,7 +392,7 @@ const ServiceWritersCorner = () => {
 
   if (loading) {
     return (
-      <Card title="Service Writer's Corner">
+      <Card title="Job Board">
         <div className="flex justify-center items-center h-48">
           <p>Loading action items...</p>
         </div>
@@ -402,7 +402,7 @@ const ServiceWritersCorner = () => {
 
   if (workOrders.length === 0) {
     return (
-      <Card title="Service Writer's Corner">
+      <Card title="Job Board">
         <div className="text-center py-6 text-gray-500">
           <p>No action items right now. All caught up!</p>
         </div>
@@ -411,7 +411,7 @@ const ServiceWritersCorner = () => {
   }
 
   return (
-    <Card title={`Service Writer's Corner (${statusCounts['All'] || 0} ${(statusCounts['All'] || 0) === 1 ? 'item' : 'items'})`}>
+    <Card title={`Job Board (${statusCounts['All'] || 0} ${(statusCounts['All'] || 0) === 1 ? 'item' : 'items'})`}>
       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-blue-800 text-sm">
           <strong>Action Required:</strong> These work orders need your attention to move forward in the workflow.

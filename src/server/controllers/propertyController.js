@@ -26,11 +26,25 @@ exports.getAllProperties = catchAsync(async (req, res, next) => {
     .populate('customer', 'name phone email')
     .sort({ updatedAt: -1 });
 
+  const propertyIds = properties.map(p => p._id);
+  const workOrderCounts = await WorkOrder.aggregate([
+    { $match: { property: { $in: propertyIds } } },
+    { $group: { _id: '$property', count: { $sum: 1 } } }
+  ]);
+  const countMap = {};
+  workOrderCounts.forEach(({ _id, count }) => { countMap[_id.toString()] = count; });
+
+  const propertiesWithCounts = properties.map(p => {
+    const obj = p.toObject();
+    obj.workOrderCount = countMap[p._id.toString()] || 0;
+    return obj;
+  });
+
   const responseData = {
     status: 'success',
     results: properties.length,
     data: {
-      properties
+      properties: propertiesWithCounts
     }
   };
 

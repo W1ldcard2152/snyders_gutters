@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const feedbackSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.ObjectId,
-    ref: 'Technician',
-    required: [true, 'Feedback must belong to a technician.'],
+    ref: 'User',
+    required: [true, 'Feedback must belong to a user.'],
   },
   feedbackText: {
     type: String,

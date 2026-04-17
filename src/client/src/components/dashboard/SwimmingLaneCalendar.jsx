@@ -342,7 +342,7 @@ const SwimmingLaneCalendar = ({ embedded = false, compact = false, initialDate =
 
   // Default: wrap in Card
   return (
-    <Card title="Shop Schedule">
+    <Card title="Weekly Schedule">
       {calendarContent}
     </Card>
   );

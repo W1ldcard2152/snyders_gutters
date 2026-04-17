@@ -31,20 +31,26 @@ const VehicleSchema = new Schema(
       ref: 'Customer',
       required: [true, 'Customer reference is required']
     },
+    address: {
+      type: String,
+      trim: true
+    },
+    propertyType: {
+      type: String,
+      trim: true,
+      enum: ['Residential', 'Commercial', 'New Construction', 'Other', '']
+    },
     year: {
       type: Number,
-      required: [true, 'Vehicle year is required'],
       min: [1900, 'Year must be at least 1900'],
       max: [new Date().getFullYear() + 1, `Year cannot be in the future`]
     },
     make: {
       type: String,
-      required: [true, 'Vehicle make is required'],
       trim: true
     },
     model: {
       type: String,
-      required: [true, 'Vehicle model is required'],
       trim: true
     },
     vin: {
@@ -88,7 +94,8 @@ VehicleSchema.index({ make: 1, model: 1 });
 
 // Virtual for vehicle display name
 VehicleSchema.virtual('displayName').get(function() {
-  return `${this.year} ${this.make} ${this.model}`;
+  if (this.address) return this.address;
+  return `${this.year || ''} ${this.make || ''} ${this.model || ''}`.trim() || 'Unknown Property';
 });
 
 // Pre-save middleware to update currentMileage from history

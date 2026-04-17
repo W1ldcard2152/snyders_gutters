@@ -304,8 +304,8 @@ const DocumentDetail = () => {
   };
 
   const getUniqueVendors = () => {
-    if (!workOrder?.parts) return [];
-    const vendors = [...new Set(workOrder.parts.map(part => part.vendor).filter(vendor => vendor && vendor.trim() !== ''))];
+    if (!workOrder?.materials && !workOrder?.parts) return [];
+    const vendors = [...new Set((workOrder.materials || workOrder.parts || []).map(part => part.vendor).filter(vendor => vendor && vendor.trim() !== ''))];
     return vendors.sort();
   };
 
@@ -618,9 +618,9 @@ const DocumentDetail = () => {
     }
 
     if (newStatus === 'Parts Ordered') {
-      const partsCount = workOrder.parts?.length || 0;
+      const partsCount = materials.length;
       if (partsCount > 0) {
-        const unorderedParts = workOrder.parts.filter(part => !part.ordered);
+        const unorderedParts = materials.filter(part => !part.ordered);
         if (unorderedParts.length > 0) {
           let msg = `Changing status to "Parts Ordered" will automatically mark ALL ${partsCount} parts as ordered.\n\n`;
           msg += `This will mark ${unorderedParts.length} parts that are currently NOT marked as ordered:\n`;
@@ -633,9 +633,9 @@ const DocumentDetail = () => {
     }
 
     if (newStatus === 'Parts Received') {
-      const partsCount = workOrder.parts?.length || 0;
+      const partsCount = materials.length;
       if (partsCount > 0) {
-        const unreceivedParts = workOrder.parts.filter(part => !part.received);
+        const unreceivedParts = materials.filter(part => !part.received);
         let msg = `Changing status to "Parts Received" will automatically mark ALL ${partsCount} parts as received.\n\n`;
         if (unreceivedParts.length > 0) {
           msg += `This will mark ${unreceivedParts.length} parts that are currently NOT marked as received:\n`;
@@ -902,9 +902,9 @@ const DocumentDetail = () => {
 
   const handleEditPart = async () => {
     try {
-      const updatedParts = [...workOrder.parts];
+      const updatedParts = [...materials];
       updatedParts[editingPart.index] = { ...updatedParts[editingPart.index], ...newPart };
-      const updateData = { parts: updatedParts, status: workOrder.status };
+      const updateData = { materials: updatedParts, status: workOrder.status };
       await checkAndUpdatePartsStatus(updateData);
       const response = await DocumentService.updateDocument(id, updateData);
       setWorkOrder(response.data.workOrder);
@@ -926,8 +926,8 @@ const DocumentDetail = () => {
 
   const handleRemovePart = async (index) => {
     try {
-      const updatedParts = workOrder.parts.filter((_, idx) => idx !== index);
-      const response = await DocumentService.updateDocument(id, { parts: updatedParts });
+      const updatedParts = materials.filter((_, idx) => idx !== index);
+      const response = await DocumentService.updateDocument(id, { materials: updatedParts });
       setWorkOrder(response.data.workOrder);
     } catch (err) {
       console.error('Error removing part:', err);
@@ -1023,7 +1023,7 @@ const DocumentDetail = () => {
 
   const handlePartStatusChange = async (partIndex, field, value) => {
     try {
-      const updatedParts = [...workOrder.parts];
+      const updatedParts = [...materials];
       updatedParts[partIndex] = { ...updatedParts[partIndex], [field]: value };
       if (field === 'ordered' && !value) updatedParts[partIndex].received = false;
       const updateData = { parts: updatedParts, status: workOrder.status };
@@ -1043,7 +1043,7 @@ const DocumentDetail = () => {
     }
     try {
       let updatedCount = 0;
-      const updatedParts = workOrder.parts.map(part => {
+      const updatedParts = materials.map(part => {
         if (part.vendor === bulkOrderData.vendor) {
           updatedCount++;
           return { ...part, purchaseOrderNumber: bulkOrderData.orderNumber, ordered: true };
@@ -1223,7 +1223,7 @@ const DocumentDetail = () => {
     vehicleMileage: workOrder.vehicleMileage,
     serviceRequested: workOrder.serviceRequested,
     diagnosticNotes: workOrder.diagnosticNotes,
-    parts: applyPartsSorting(workOrder.parts || []),
+    parts: applyPartsSorting(materials),
     labor: workOrder.labor || [],
     customerFacingNotes: notes.filter(n => n.isCustomerFacing),
     technicianName: getCustomerFacingName(workOrder.assignedTechnician),
@@ -1326,8 +1326,11 @@ const DocumentDetail = () => {
     );
   }
 
+  // Alias for renamed model field
+  const materials = workOrder.materials || workOrder.parts || [];
+
   // ==================== Calculate Totals ====================
-  const partsCost = (workOrder.parts || []).reduce((total, part) => {
+  const partsCost = materials.reduce((total, part) => {
     const lineTotal = part.price * part.quantity;
     const core = (part.coreChargeInvoiceable && part.coreCharge) ? part.coreCharge : 0;
     return total + lineTotal + core;
@@ -1438,7 +1441,7 @@ const DocumentDetail = () => {
                         {permissions.workOrders.canSplit(currentUser) && (
                           <button className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                             onClick={() => { setSplitModalOpen(true); setMoreActionsOpen(false); }}
-                            disabled={(!workOrder.parts || workOrder.parts.length === 0) && (!workOrder.labor || workOrder.labor.length === 0)}>
+                            disabled={!materials.length && (!workOrder.labor || workOrder.labor.length === 0)}>
                             <i className="fas fa-code-branch mr-2"></i>Split Work Order
                           </button>
                         )}
@@ -1884,13 +1887,13 @@ const DocumentDetail = () => {
           title="Parts"
           headerActions={
             <div className="flex space-x-2">
-              {!isQuote && workOrder?.parts?.length > 0 && (
+              {!isQuote && materials.length > 0 && (
                 <Button onClick={() => setShowCost(!showCost)} variant="light" size="sm">
                   <i className={`fas fa-${showCost ? 'eye-slash' : 'eye'} mr-1`}></i>
                   {showCost ? 'Hide' : 'Show'} Cost
                 </Button>
               )}
-              {!isQuote && workOrder?.parts?.length > 0 && getUniqueVendors().length > 0 && (
+              {!isQuote && materials.length > 0 && getUniqueVendors().length > 0 && (
                 <Button onClick={() => setBulkOrderModalOpen(true)} variant="secondary" size="sm">
                   <i className="fas fa-list-ul mr-1"></i>Bulk Order #
                 </Button>
@@ -1918,7 +1921,7 @@ const DocumentDetail = () => {
             </div>
           }
         >
-          {(workOrder.parts || []).length === 0 ? (
+          {materials.length === 0 ? (
             <div className="text-center py-6 text-gray-500"><p>No parts added.</p></div>
           ) : (
             <div className="overflow-x-auto">
@@ -1956,7 +1959,7 @@ const DocumentDetail = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {applyPartsSorting(
-                    workOrder.parts.map((part, originalIndex) => ({ ...part, originalIndex }))
+                    materials.map((part, originalIndex) => ({ ...part, originalIndex }))
                   ).map((part) => (
                     <React.Fragment key={part.originalIndex}>
                     <tr className="cursor-pointer hover:bg-gray-50" onClick={() => setExpandedPartIndex(expandedPartIndex === part.originalIndex ? null : part.originalIndex)}>
@@ -2677,8 +2680,8 @@ const DocumentDetail = () => {
                     <input type="checkbox" className="h-4 w-4 mt-0.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                       checked={saveToCatalog} onChange={(e) => setSaveToCatalog(e.target.checked)} />
                     <div className="ml-2">
-                      <span className="text-sm text-gray-700">Save to Parts Catalog</span>
-                      <p className="text-xs text-gray-400">Makes this part searchable for future work orders</p>
+                      <span className="text-sm text-gray-700">Save to Materials Catalog</span>
+                      <p className="text-xs text-gray-400">Makes this material searchable for future work orders</p>
                     </div>
                   </label>
                 </div>
@@ -2782,7 +2785,7 @@ const DocumentDetail = () => {
                   value={bulkOrderData.vendor} onChange={(e) => setBulkOrderData({ ...bulkOrderData, vendor: e.target.value })}>
                   <option value="">Select a vendor...</option>
                   {getUniqueVendors().map(vendor => {
-                    const partsCount = workOrder.parts.filter(part => part.vendor === vendor).length;
+                    const partsCount = materials.filter(part => part.vendor === vendor).length;
                     return (<option key={vendor} value={vendor}>{vendor} ({partsCount} part{partsCount !== 1 ? 's' : ''})</option>);
                   })}
                 </select>
@@ -2796,7 +2799,7 @@ const DocumentDetail = () => {
               {bulkOrderData.vendor && (
                 <div className="bg-blue-50 p-3 rounded-md">
                   <p className="text-sm text-blue-800">
-                    This will update the order number for all parts from <strong>{bulkOrderData.vendor}</strong> ({workOrder.parts.filter(part => part.vendor === bulkOrderData.vendor).length} parts).
+                    This will update the order number for all parts from <strong>{bulkOrderData.vendor}</strong> ({materials.filter(part => part.vendor === bulkOrderData.vendor).length} parts).
                   </p>
                 </div>
               )}

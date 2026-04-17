@@ -129,7 +129,7 @@ const CustomerList = () => {
                     Phone
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vehicles
+                    Properties
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -152,7 +152,7 @@ const CustomerList = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-gray-500">
-                        {customer.vehicles ? customer.vehicles.length : 0}
+                        {customer.properties ? customer.properties.length : 0}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

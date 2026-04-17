@@ -32,9 +32,9 @@ const CustomerDetail = () => {
         const customerResponse = await CustomerService.getCustomer(id);
         setCustomer(customerResponse.data.customer);
         
-        // Fetch customer vehicles
+        // Fetch customer properties
         const vehiclesResponse = await CustomerService.getCustomerVehicles(id);
-        setVehicles(vehiclesResponse.data.vehicles);
+        setVehicles(vehiclesResponse.data.properties || vehiclesResponse.data.vehicles || []);
         
         // Fetch customer work orders
         const workOrdersResponse = await WorkOrderService.getAllWorkOrders({ customer: id });
@@ -165,7 +165,7 @@ const CustomerDetail = () => {
         <Card title="Customer Stats">
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-blue-800 font-medium">Vehicles</h3>
+              <h3 className="text-blue-800 font-medium">Properties</h3>
               <p className="text-3xl font-bold">{vehicles.length}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
@@ -177,21 +177,21 @@ const CustomerDetail = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card 
-          title="Vehicles" 
+        <Card
+          title="Properties"
           headerActions={
-            <Button 
+            <Button
               to={`/properties/new?customer=${id}`}
               variant="outline"
               size="sm"
             >
-              Add Vehicle
+              Add Property
             </Button>
           }
         >
           {vehicles.length === 0 ? (
             <div className="text-center py-6 text-gray-500">
-              <p>No vehicles found for this customer.</p>
+              <p>No properties found for this customer.</p>
             </div>
           ) : (
             <>
@@ -200,12 +200,13 @@ const CustomerDetail = () => {
                   <div key={vehicle._id} className="py-3 flex justify-between items-center">
                     <div>
                       <p className="font-medium">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.address?.street || (typeof vehicle.address === 'string' && vehicle.address) || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Property'}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        {vehicle.vin ? `VIN: ${vehicle.vin}` : 'No VIN'}
-                        {vehicle.licensePlate ? ` • License: ${vehicle.licensePlate}` : ''}
-                      </p>
+                      {vehicle.address?.city && (
+                        <p className="text-sm text-gray-600">
+                          {vehicle.address.city}{vehicle.address.state ? `, ${vehicle.address.state}` : ''}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Button
@@ -225,7 +226,7 @@ const CustomerDetail = () => {
                     onClick={() => setShowAllVehicles(!showAllVehicles)}
                     variant="link"
                   >
-                    {showAllVehicles ? 'Show less' : `View ${vehicles.length - 5} more vehicle${vehicles.length - 5 > 1 ? 's' : ''}`}
+                    {showAllVehicles ? 'Show less' : `View ${vehicles.length - 5} more propert${vehicles.length - 5 > 1 ? 'ies' : 'y'}`}
                   </Button>
                 </div>
               )}
@@ -257,7 +258,7 @@ const CustomerDetail = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium">
-                          {workOrder.vehicle?.year} {workOrder.vehicle?.make} {workOrder.vehicle?.model}
+                          {workOrder.property?.address?.street || workOrder.vehicle?.address?.street || workOrder.vehicle?.address || `${workOrder.vehicle?.year || ''} ${workOrder.vehicle?.make || ''} ${workOrder.vehicle?.model || ''}`.trim() || 'Property'}
                         </p>
                         <p className="text-sm text-gray-600 truncate max-w-xs">
                           {workOrder.serviceRequested}

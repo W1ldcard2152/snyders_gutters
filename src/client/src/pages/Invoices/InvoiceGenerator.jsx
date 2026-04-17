@@ -108,25 +108,23 @@ const InvoiceGenerator = () => {
             if (customerRes && customerRes.data && customerRes.data.customer) {
                 setSelectedCustomer(customerRes.data.customer);
                 const vehiclesRes = await CustomerService.getCustomerVehicles(customerId);
-                if (vehiclesRes && vehiclesRes.data && vehiclesRes.data.vehicles) {
-                    setVehicles(vehiclesRes.data.vehicles);
-                    if (workOrder.vehicle) {
-                        const vehicleId = typeof workOrder.vehicle === 'object'
-                            ? workOrder.vehicle._id
-                            : workOrder.vehicle;
-                        const vehicleFromList = vehiclesRes.data.vehicles.find(v =>
-                            v._id === vehicleId || v._id.toString() === vehicleId
+                const fetchedProperties = vehiclesRes?.data?.properties || vehiclesRes?.data?.vehicles || [];
+                if (fetchedProperties.length > 0 || vehiclesRes?.data) {
+                    setVehicles(fetchedProperties);
+                    const propertyRef = workOrder.property || workOrder.vehicle;
+                    if (propertyRef) {
+                        const propertyId = typeof propertyRef === 'object' ? propertyRef._id : propertyRef;
+                        const propFromList = fetchedProperties.find(v =>
+                            v._id === propertyId || v._id.toString() === propertyId
                         );
-                        if (vehicleFromList) {
-                            setSelectedVehicle(vehicleFromList);
+                        if (propFromList) {
+                            setSelectedVehicle(propFromList);
                         } else {
                             try {
-                                const vehicleRes = await VehicleService.getVehicle(vehicleId);
-                                if (vehicleRes && vehicleRes.data && vehicleRes.data.vehicle) {
-                                    setSelectedVehicle(vehicleRes.data.vehicle);
-                                }
-                            } catch (vehicleErr) {
-                                console.error(`Error loading vehicle ${vehicleId} directly:`, vehicleErr);
+                                const propRes = await VehicleService.getVehicle(propertyId);
+                                setSelectedVehicle(propRes?.data?.property || propRes?.data?.vehicle || null);
+                            } catch (propErr) {
+                                console.error(`Error loading property ${propertyId} directly:`, propErr);
                             }
                         }
                     }
@@ -139,7 +137,7 @@ const InvoiceGenerator = () => {
       }
 
       // Sort parts using the work order's saved sort config
-      const sortedParts = workOrder.parts ? [...workOrder.parts] : [];
+      const sortedParts = workOrder.materials ? [...workOrder.materials] : workOrder.parts ? [...workOrder.parts] : [];
       if (workOrder.partsSortConfig && workOrder.partsSortConfig.length > 0) {
         sortedParts.sort((a, b) => {
           for (const config of workOrder.partsSortConfig) {
@@ -265,7 +263,7 @@ const InvoiceGenerator = () => {
       const customerRes = await CustomerService.getCustomer(customerId);
       setSelectedCustomer(customerRes.data.customer);
       const vehiclesRes = await CustomerService.getCustomerVehicles(customerId);
-      setVehicles(vehiclesRes.data.vehicles);
+      setVehicles(vehiclesRes.data.properties || vehiclesRes.data.vehicles || []);
       setLoading(false);
     } catch (err) {
       setError('Failed to load customer vehicles.');
@@ -286,7 +284,7 @@ const InvoiceGenerator = () => {
           setSelectedVehicle(vehicleFromList);
       } else {
           const vehicleRes = await VehicleService.getVehicle(vehicleId);
-          setSelectedVehicle(vehicleRes.data.vehicle);
+          setSelectedVehicle(vehicleRes.data.property || vehicleRes.data.vehicle);
       }
       setLoading(false);
     } catch (err) {
@@ -559,10 +557,10 @@ const InvoiceGenerator = () => {
             </div>
 
             <div className="border border-gray-200 rounded-md p-4">
-              <h3 className="text-xl font-semibold mb-3 text-gray-700">Customer & Vehicle</h3>
+              <h3 className="text-xl font-semibold mb-3 text-gray-700">Customer & Property</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <SelectInput label="Customer" name="customer" value={selectedCustomer?._id || ''} onChange={handleCustomerChange} options={[{ value: '', label: selectedCustomer ? 'Change Customer...' : 'Select a customer...' }, ...customers.map(c => ({ value: c._id, label: `${c.name} (${c.phone || 'No Phone'})` })).sort((a, b) => a.label.localeCompare(b.label))]} disabled={!!selectedWorkOrder} className="mt-1 block w-full" />
-                <SelectInput label="Vehicle" name="vehicle" value={selectedVehicle?._id || ''} onChange={handleVehicleChange} options={[{ value: '', label: selectedVehicle ? 'Change Vehicle...' : 'Select a vehicle...' }, ...vehicles.map(v => ({ value: v._id, label: `${v.year} ${v.make} ${v.model} ${v.licensePlate ? `(${v.licensePlate})` : ''}` }))]} disabled={!selectedCustomer || !!selectedWorkOrder} className="mt-1 block w-full" />
+                <SelectInput label="Property" name="property" value={selectedVehicle?._id || ''} onChange={handleVehicleChange} options={[{ value: '', label: selectedVehicle ? 'Change Property...' : 'Select a property...' }, ...vehicles.map(v => ({ value: v._id, label: v.address?.street || (typeof v.address === 'string' && v.address) || 'Unknown Property' }))]} disabled={!selectedCustomer || !!selectedWorkOrder} className="mt-1 block w-full" />
               </div>
             </div>
 

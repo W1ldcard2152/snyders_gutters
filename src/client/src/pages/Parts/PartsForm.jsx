@@ -174,7 +174,7 @@ const PartsForm = () => {
     <div className="container mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">
-          {isEditing ? 'Edit Catalog Part' : 'Add to Parts Catalog'}
+          {isEditing ? 'Edit Catalog Material' : 'Add to Materials Catalog'}
         </h1>
       </div>
 

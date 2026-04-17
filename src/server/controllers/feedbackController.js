@@ -39,7 +39,7 @@ exports.getFeedback = catchAsync(async (req, res, next) => {
 
 // Create a new feedback entry
 exports.createFeedback = catchAsync(async (req, res, next) => {
-  const newFeedback = await Feedback.create(req.body);
+  const newFeedback = await Feedback.create({ ...req.body, user: req.user._id });
   
   res.status(201).json({
     status: 'success',

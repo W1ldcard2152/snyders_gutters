@@ -98,7 +98,7 @@ const IntakePage = () => {
     : null;
 
   const vehicleSummary = vehicle
-    ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    ? vehicle.address?.street || (typeof vehicle.address === 'string' && vehicle.address) || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Property saved'
     : null;
 
   const workOrderSummary = workOrder
@@ -145,10 +145,10 @@ const IntakePage = () => {
         />
       </IntakeSection>
 
-      {/* Section 2: Vehicle */}
+      {/* Section 2: Property */}
       <IntakeSection
-        title="Vehicle"
-        icon="fas fa-car"
+        title="Property"
+        icon="fas fa-home"
         stepNumber={2}
         isLocked={!customer}
         isSaved={!!vehicle}

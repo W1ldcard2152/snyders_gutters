@@ -28,15 +28,13 @@ const VehicleList = () => {
         }
 
         const response = await VehicleService.getAllVehicles(filters);
-        // Vehicles already come with customer data populated from the API
-        // Sort by customer creation date (newest first)
-        const sortedVehicles = sortVehiclesByCustomerDate(response.data.vehicles);
+        const sortedVehicles = sortVehiclesByCustomerDate(response.data.properties || response.data.vehicles || []);
         setVehicles(sortedVehicles);
 
         setLoading(false);
       } catch (err) {
         console.error('Error fetching vehicles:', err);
-        setError('Failed to load vehicles. Please try again later.');
+        setError('Failed to load properties. Please try again later.');
         setLoading(false);
       }
     };
@@ -66,12 +64,12 @@ const VehicleList = () => {
             filters.customer = customerIdParam;
           }
           const response = await VehicleService.getAllVehicles(filters);
-          const sortedVehicles = sortVehiclesByCustomerDate(response.data.vehicles);
+          const sortedVehicles = sortVehiclesByCustomerDate(response.data.properties || response.data.vehicles || []);
           setVehicles(sortedVehicles);
           setIsSearching(false);
         } catch (err) {
           console.error('Error fetching vehicles:', err);
-          setError('Failed to load vehicles. Please try again later.');
+          setError('Failed to load properties. Please try again later.');
           setIsSearching(false);
         }
       };
@@ -95,13 +93,12 @@ const VehicleList = () => {
     try {
       setIsSearching(true);
       const response = await VehicleService.searchVehicles(query);
-      // Search results also come with customer data populated
-      const sortedVehicles = sortVehiclesByCustomerDate(response.data.vehicles);
+      const sortedVehicles = sortVehiclesByCustomerDate(response.data.properties || response.data.vehicles || []);
       setVehicles(sortedVehicles);
       setIsSearching(false);
     } catch (err) {
       console.error('Error searching vehicles:', err);
-      setError('Failed to search vehicles. Please try again later.');
+      setError('Failed to search properties. Please try again later.');
       setIsSearching(false);
     }
   };
@@ -117,9 +114,9 @@ const VehicleList = () => {
   return (
     <div className="container mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Vehicles</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Properties</h1>
         <Button to="/properties/new" variant="primary">
-          Add New Vehicle
+          Add New Property
         </Button>
       </div>
 
@@ -132,7 +129,7 @@ const VehicleList = () => {
       <Card>
         <div className="mb-4 relative">
           <Input
-            placeholder="Search by make, model, or VIN..."
+            placeholder="Search by address or property type..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pr-10"
@@ -146,11 +143,11 @@ const VehicleList = () => {
 
         {loading ? (
           <div className="flex justify-center items-center h-48">
-            <p>Loading vehicles...</p>
+            <p>Loading properties...</p>
           </div>
         ) : vehicles.length === 0 ? (
           <div className="text-center py-6 text-gray-500">
-            <p>No vehicles found.</p>
+            <p>No properties found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -158,16 +155,16 @@ const VehicleList = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vehicle
+                    Property
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    VIN / License
+                    Type
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Owner
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Service History
+                    Work Orders
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -179,13 +176,17 @@ const VehicleList = () => {
                   <tr key={vehicle._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-medium text-gray-900">
-                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.address?.street || vehicle.address || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Unknown Property'}
                       </div>
+                      {(vehicle.address?.city || vehicle.address?.state) && (
+                        <div className="text-sm text-gray-500">
+                          {[vehicle.address.city, vehicle.address.state].filter(Boolean).join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-500">
-                        {vehicle.vin && <div>VIN: {vehicle.vin}</div>}
-                        {vehicle.licensePlate && <div>License: {vehicle.licensePlate}</div>}
+                        {vehicle.propertyType || vehicle.make || '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -195,7 +196,7 @@ const VehicleList = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-500">
-                        {vehicle.serviceHistory ? vehicle.serviceHistory.length : 0} records
+                        {vehicle.workOrderCount ?? vehicle.serviceHistory?.length ?? 0} records
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

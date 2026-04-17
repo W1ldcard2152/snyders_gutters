@@ -1,63 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import SelectInput from './SelectInput';
+import React, { useState } from 'react';
 import TextArea from './TextArea';
 import Button from './Button';
-import technicianService from '../../services/technicianService';
-import { Link } from 'react-router-dom'; // Import Link
+import { Link } from 'react-router-dom';
 import feedbackService from '../../services/feedbackService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const FeedbackButton = () => {
+  const { currentUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [technicians, setTechnicians] = useState([]);
-  const [feedbackData, setFeedbackData] = useState({
-    user: '',
-    feedbackText: '',
-  });
+  const [feedbackText, setFeedbackText] = useState('');
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState(''); // 'success' or 'error'
-
-  useEffect(() => {
-    const fetchTechnicians = async () => {
-      try {
-        const response = await technicianService.getAllTechnicians();
-        setTechnicians(response.data.data.technicians.map(tech => ({
-          value: tech._id,
-          label: tech.name
-        })));
-      } catch (error) {
-        console.error('Error fetching technicians:', error);
-        setMessage('Failed to load technicians.');
-        setMessageType('error');
-      }
-    };
-    fetchTechnicians();
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFeedbackData(prevData => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
+  const [messageType, setMessageType] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setMessageType('');
 
-    if (!feedbackData.user || !feedbackData.feedbackText) {
-      setMessage('Please select a user and enter feedback text.');
+    if (!feedbackText) {
+      setMessage('Please enter feedback text.');
       setMessageType('error');
       return;
     }
 
     try {
-      await feedbackService.createFeedback(feedbackData);
+      await feedbackService.createFeedback({ feedbackText });
       setMessage('Feedback submitted successfully!');
       setMessageType('success');
-      setFeedbackData({ user: '', feedbackText: '' }); // Clear form
-      setTimeout(() => setIsOpen(false), 2000); // Close popover after 2 seconds
+      setFeedbackText('');
+      setTimeout(() => setIsOpen(false), 2000);
     } catch (error) {
       console.error('Error submitting feedback:', error);
       setMessage('Failed to submit feedback. Please try again.');
@@ -82,24 +53,17 @@ const FeedbackButton = () => {
           >
             &times;
           </button>
-          <h3 className="text-lg font-semibold mb-4">Submit Feedback</h3>
+          <h3 className="text-lg font-semibold mb-1">Submit Feedback</h3>
+          {currentUser && (
+            <p className="text-sm text-gray-500 mb-4">Submitting as <span className="font-medium">{currentUser.name}</span></p>
+          )}
           <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <SelectInput
-                label="User"
-                name="user"
-                options={technicians}
-                value={feedbackData.user}
-                onChange={handleChange}
-                required
-              />
-            </div>
             <div className="mb-4">
               <TextArea
                 label="Feedback"
                 name="feedbackText"
-                value={feedbackData.feedbackText}
-                onChange={handleChange}
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
                 rows="4"
                 required
               />

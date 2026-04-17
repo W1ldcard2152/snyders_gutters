@@ -210,7 +210,7 @@ const ReceiptImportModal = ({ isOpen, onClose, entityId, onSuccess, markupPercen
               className="text-xs border border-gray-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               <option value="">WO Only</option>
-              <option value="catalog">+ Parts Catalog</option>
+              <option value="catalog">+ Materials Catalog</option>
               <option value="inventory">+ Shop Inventory</option>
             </select>
           </div>
@@ -293,7 +293,7 @@ const ReceiptImportModal = ({ isOpen, onClose, entityId, onSuccess, markupPercen
                             className="text-xs border border-gray-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           >
                             <option value="">WO Only</option>
-                            <option value="catalog">+ Parts Catalog</option>
+                            <option value="catalog">+ Materials Catalog</option>
                             <option value="inventory">+ Shop Inventory</option>
                           </select>
                         )}

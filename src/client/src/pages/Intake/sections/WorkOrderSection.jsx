@@ -17,9 +17,6 @@ const WorkOrderSchema = Yup.object().shape({
   ).min(1, 'At least one service item is required'),
   priority: Yup.string().required('Priority is required'),
   diagnosticNotes: Yup.string(),
-  currentMileage: Yup.number()
-    .min(0, 'Mileage cannot be negative')
-    .nullable(),
   skipDiagnostics: Yup.boolean()
 });
 
@@ -40,9 +37,8 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
 
       const data = {
         customer: customer._id,
-        vehicle: vehicle._id,
+        property: vehicle._id,
         date: getTodayForInput(),
-        currentMileage: values.currentMileage,
         services: values.services,
         serviceRequested: values.services.map(s => s.description).join('\n'),
         priority: values.priority,
@@ -106,8 +102,8 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
             <span className="text-primary-700">{customer?.name}</span>
           </div>
           <div>
-            <span className="font-medium text-primary-900">Vehicle: </span>
-            <span className="text-primary-700">{vehicle?.year} {vehicle?.make} {vehicle?.model}</span>
+            <span className="font-medium text-primary-900">Property: </span>
+            <span className="text-primary-700">{vehicle?.address?.street || (typeof vehicle?.address === 'string' && vehicle?.address) || `${vehicle?.year || ''} ${vehicle?.make || ''} ${vehicle?.model || ''}`.trim()}</span>
           </div>
         </div>
       </div>
@@ -117,7 +113,6 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
           services: [{ description: '' }],
           priority: 'Normal',
           diagnosticNotes: '',
-          currentMileage: vehicle?.currentMileage || '',
           skipDiagnostics: false
         }}
         validationSchema={WorkOrderSchema}
@@ -210,37 +205,22 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
                 </FieldArray>
               </div>
 
-              {/* Priority and Mileage */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SelectInput
-                  label="Priority Level"
-                  name="priority"
-                  options={priorityOptions}
-                  value={values.priority}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.priority}
-                  touched={touched.priority}
-                  required
-                />
+              {/* Priority */}
+              <SelectInput
+                label="Priority Level"
+                name="priority"
+                options={priorityOptions}
+                value={values.priority}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.priority}
+                touched={touched.priority}
+                required
+              />
 
-                <Input
-                  label="Current Mileage"
-                  name="currentMileage"
-                  type="number"
-                  min="0"
-                  value={values.currentMileage}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.currentMileage}
-                  touched={touched.currentMileage}
-                  placeholder="Enter current odometer reading"
-                />
-              </div>
-
-              {/* Diagnostic Notes */}
+              {/* Initial Notes */}
               <TextArea
-                label="Initial Diagnostic Notes"
+                label="Initial Notes"
                 name="diagnosticNotes"
                 value={values.diagnosticNotes}
                 onChange={handleChange}
@@ -248,10 +228,10 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
                 error={errors.diagnosticNotes}
                 touched={touched.diagnosticNotes}
                 rows={3}
-                placeholder="Any initial observations, customer complaints, or diagnostic notes..."
+                placeholder="Any initial notes, customer requests, or observations about the property..."
               />
 
-              {/* Skip Diagnostics (not shown for quotes) */}
+              {/* Site assessment checkbox (not shown for quotes) */}
               {!isQuoteMode && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <div className="flex items-start">
@@ -266,10 +246,10 @@ const WorkOrderSection = ({ customer, vehicle, mode = 'workOrder', onSaved, onEr
                     />
                     <div>
                       <label htmlFor="skipDiagnostics" className="text-sm font-medium text-gray-900 cursor-pointer">
-                        This work order does not require diagnostics/inspection
+                        Ready to proceed — no site visit needed
                       </label>
                       <p className="text-xs text-gray-600 mt-1">
-                        Check this for services that don't need diagnosis (e.g., oil changes, scheduled maintenance).
+                        Check this if the property has already been assessed and materials can be ordered without a site visit first.
                       </p>
                     </div>
                   </div>

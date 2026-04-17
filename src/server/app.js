@@ -39,6 +39,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const scheduleBlockRoutes = require('./routes/scheduleBlockRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const servicePackageRoutes = require('./routes/servicePackageRoutes');
+const partRoutes = require('./routes/partRoutes');
 
 // Initialize Express app
 const app = express();
@@ -162,6 +163,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/schedule-blocks', scheduleBlockRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/service-packages', servicePackageRoutes);
+app.use('/api/parts', partRoutes);
 const followUpRoutes = require('./routes/followUpRoutes');
 app.use('/api/follow-ups', followUpRoutes);
 

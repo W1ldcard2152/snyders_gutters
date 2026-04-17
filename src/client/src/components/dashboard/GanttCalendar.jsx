@@ -132,7 +132,7 @@ const GanttCalendar = () => {
 
   return (
     <Card
-      title="Shop Schedule"
+      title="Weekly Schedule"
       headerContent={
         <div className="flex gap-2">
           <button

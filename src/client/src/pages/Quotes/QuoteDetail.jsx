@@ -132,8 +132,8 @@ const QuoteDetail = () => {
       return;
     }
     try {
-      const updatedParts = [...(quote.parts || []), { ...newPart }];
-      const response = await WorkOrderService.updateWorkOrder(id, { parts: updatedParts });
+      const updatedParts = [...(quote.materials || quote.parts || []), { ...newPart }];
+      const response = await WorkOrderService.updateWorkOrder(id, { materials: updatedParts });
       setQuote(response.data.workOrder);
       setPartModalOpen(false);
       setNewPart({ name: '', partNumber: '', itemNumber: '', quantity: 1, price: 0, cost: 0, vendor: '', supplier: '', purchaseOrderNumber: '' });
@@ -147,9 +147,9 @@ const QuoteDetail = () => {
 
   const handleUpdatePart = async (partIndex, updatedPart) => {
     try {
-      const updatedParts = [...quote.parts];
+      const updatedParts = [...(quote.materials || quote.parts || [])];
       updatedParts[partIndex] = updatedPart;
-      const response = await WorkOrderService.updateWorkOrder(id, { parts: updatedParts });
+      const response = await WorkOrderService.updateWorkOrder(id, { materials: updatedParts });
       setQuote(response.data.workOrder);
       setEditingPart(null);
       setError(null);
@@ -162,8 +162,8 @@ const QuoteDetail = () => {
   const handleDeletePart = async (partIndex) => {
     if (!window.confirm('Remove this part from the quote?')) return;
     try {
-      const updatedParts = quote.parts.filter((_, i) => i !== partIndex);
-      const response = await WorkOrderService.updateWorkOrder(id, { parts: updatedParts });
+      const updatedParts = (quote.materials || quote.parts || []).filter((_, i) => i !== partIndex);
+      const response = await WorkOrderService.updateWorkOrder(id, { materials: updatedParts });
       setQuote(response.data.workOrder);
       setError(null);
     } catch (err) {
@@ -343,9 +343,9 @@ const QuoteDetail = () => {
     documentDate: quote.createdAt,
     status: quote.status,
     customer: quote.customer,
-    vehicle: quote.vehicle,
-    serviceRequested: quote.serviceRequested,
-    parts: quote.parts || [],
+    property: quote.property || quote.vehicle,
+    serviceRequested: quote.services?.map(s => s.description).join(', ') || quote.serviceRequested,
+    parts: quote.materials || quote.parts || [],
     labor: quote.labor || [],
     servicePackages: quote.servicePackages || [],
     customerFacingNotes: notes.filter(n => n.isCustomerFacing),
@@ -440,7 +440,8 @@ const QuoteDetail = () => {
   }
 
   // Calculate totals
-  const partsCost = (quote.parts || []).reduce((total, part) => total + (part.price * part.quantity), 0);
+  const materials = quote.materials || quote.parts || [];
+  const partsCost = materials.reduce((total, part) => total + (part.price * part.quantity), 0);
   const laborCost = (quote.labor || []).reduce((total, labor) => {
     const qty = labor.quantity || labor.hours || 0;
     return total + (qty * labor.rate);
@@ -593,8 +594,8 @@ const QuoteDetail = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Customer & Vehicle Card */}
-        <Card title="Customer & Vehicle">
+        {/* Customer & Property Card */}
+        <Card title="Customer & Property">
           <div className="space-y-2">
             <div>
               <p className="text-sm text-gray-500">Customer</p>
@@ -616,30 +617,20 @@ const QuoteDetail = () => {
               )}
             </div>
             <div>
-              <p className="text-sm text-gray-500">Vehicle</p>
-              {quote.vehicle ? (
-                <Link
-                  to={`/properties/${quote.vehicle._id}`}
-                  className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
-                >
-                  {quote.vehicle.year} {quote.vehicle.make} {quote.vehicle.model}
-                </Link>
-              ) : (
-                <p className="font-medium text-gray-400">No Vehicle</p>
-              )}
-              {quote.vehicle?.vin && (
-                <p className="text-sm text-gray-600">VIN: {quote.vehicle.vin}</p>
-              )}
-              {quote.vehicle?.licensePlate && (
-                <p className="text-sm text-gray-600">Plate: {quote.vehicle.licensePlate}</p>
-              )}
+              <p className="text-sm text-gray-500">Property</p>
+              {(quote.property || quote.vehicle) ? (() => {
+                const prop = quote.property || quote.vehicle;
+                const street = prop.address?.street || (typeof prop.address === 'string' && prop.address) || 'Unknown Address';
+                const cityState = [prop.address?.city, prop.address?.state].filter(Boolean).join(', ');
+                return (
+                  <>
+                    <Link to={`/properties/${prop._id}`} className="font-medium text-primary-600 hover:text-primary-800 hover:underline">{street}</Link>
+                    {cityState && <p className="text-sm text-gray-600">{cityState}</p>}
+                    {prop.propertyType && <p className="text-sm text-gray-600 capitalize">{prop.propertyType}</p>}
+                  </>
+                );
+              })() : <p className="font-medium text-gray-400">No Property</p>}
             </div>
-            {quote.currentMileage > 0 && (
-              <div>
-                <p className="text-sm text-gray-500">Current Mileage</p>
-                <p className="font-medium">{quote.currentMileage.toLocaleString()} mi</p>
-              </div>
-            )}
           </div>
         </Card>
 
@@ -647,7 +638,7 @@ const QuoteDetail = () => {
         <Card title="Quote Summary">
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Parts</span>
+              <span className="text-sm text-gray-600">Materials</span>
               <span className="font-medium">{formatCurrency(partsCost)}</span>
             </div>
             <div className="flex justify-between items-center">
@@ -696,27 +687,27 @@ const QuoteDetail = () => {
         </div>
       </Card>
 
-      {/* Parts Section */}
+      {/* Materials Section */}
       <Card
-        title="Parts"
+        title="Materials"
         headerActions={
           <div className="flex space-x-2">
             <Button variant="success" size="sm" onClick={() => setReceiptModalOpen(true)}>
-              <i className="fas fa-file-import mr-1"></i>Import Parts
+              <i className="fas fa-file-import mr-1"></i>Import Materials
             </Button>
             <Button variant="primary" size="sm" onClick={() => setPartModalOpen(true)}>
-              <i className="fas fa-plus mr-1"></i>Add Part
+              <i className="fas fa-plus mr-1"></i>Add Material
             </Button>
           </div>
         }
         className="mb-6"
       >
-        {quote.parts && quote.parts.length > 0 ? (
+        {materials.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Material</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Part #</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
@@ -726,7 +717,7 @@ const QuoteDetail = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {quote.parts.map((part, index) => (
+                {materials.map((part, index) => (
                   <tr key={part._id || index}>
                     {editingPart === index ? (
                       <>
@@ -735,9 +726,9 @@ const QuoteDetail = () => {
                             type="text"
                             value={part.name}
                             onChange={(e) => {
-                              const updated = [...quote.parts];
+                              const updated = [...materials];
                               updated[index] = { ...updated[index], name: e.target.value };
-                              setQuote({ ...quote, parts: updated });
+                              setQuote({ ...quote, materials: updated });
                             }}
                             className="w-full border rounded px-2 py-1 text-sm"
                           />
@@ -747,9 +738,9 @@ const QuoteDetail = () => {
                             type="text"
                             value={part.partNumber || ''}
                             onChange={(e) => {
-                              const updated = [...quote.parts];
+                              const updated = [...materials];
                               updated[index] = { ...updated[index], partNumber: e.target.value };
-                              setQuote({ ...quote, parts: updated });
+                              setQuote({ ...quote, materials: updated });
                             }}
                             className="w-full border rounded px-2 py-1 text-sm"
                           />
@@ -759,9 +750,9 @@ const QuoteDetail = () => {
                             type="text"
                             value={part.vendor || ''}
                             onChange={(e) => {
-                              const updated = [...quote.parts];
+                              const updated = [...materials];
                               updated[index] = { ...updated[index], vendor: e.target.value };
-                              setQuote({ ...quote, parts: updated });
+                              setQuote({ ...quote, materials: updated });
                             }}
                             className="w-full border rounded px-2 py-1 text-sm"
                           />
@@ -772,9 +763,9 @@ const QuoteDetail = () => {
                             min="1"
                             value={part.quantity}
                             onChange={(e) => {
-                              const updated = [...quote.parts];
+                              const updated = [...materials];
                               updated[index] = { ...updated[index], quantity: parseInt(e.target.value) || 1 };
-                              setQuote({ ...quote, parts: updated });
+                              setQuote({ ...quote, materials: updated });
                             }}
                             className="w-20 border rounded px-2 py-1 text-sm text-right"
                           />
@@ -786,9 +777,9 @@ const QuoteDetail = () => {
                             step="0.01"
                             value={part.price}
                             onChange={(e) => {
-                              const updated = [...quote.parts];
+                              const updated = [...materials];
                               updated[index] = { ...updated[index], price: parseFloat(e.target.value) || 0 };
-                              setQuote({ ...quote, parts: updated });
+                              setQuote({ ...quote, materials: updated });
                             }}
                             className="w-24 border rounded px-2 py-1 text-sm text-right"
                           />
@@ -798,7 +789,7 @@ const QuoteDetail = () => {
                         </td>
                         <td className="px-4 py-2 text-right">
                           <button
-                            onClick={() => handleUpdatePart(index, quote.parts[index])}
+                            onClick={() => handleUpdatePart(index, materials[index])}
                             className="text-green-600 hover:text-green-800 mr-2"
                           >
                             <i className="fas fa-check"></i>
@@ -840,7 +831,7 @@ const QuoteDetail = () => {
               </tbody>
               <tfoot className="bg-gray-50">
                 <tr>
-                  <td colSpan="5" className="px-4 py-2 text-right text-sm font-medium text-gray-700">Parts Total:</td>
+                  <td colSpan="5" className="px-4 py-2 text-right text-sm font-medium text-gray-700">Materials Total:</td>
                   <td className="px-4 py-2 text-right text-sm font-bold">{formatCurrency(partsCost)}</td>
                   <td></td>
                 </tr>
@@ -848,7 +839,7 @@ const QuoteDetail = () => {
             </table>
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-4">No parts added yet.</p>
+          <p className="text-gray-500 text-center py-4">No materials added yet.</p>
         )}
       </Card>
 

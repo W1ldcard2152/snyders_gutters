@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node src/server/scripts/createAdmin.js)"
+      "Bash(node src/server/scripts/createAdmin.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }

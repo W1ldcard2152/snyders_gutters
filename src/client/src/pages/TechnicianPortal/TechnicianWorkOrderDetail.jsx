@@ -300,12 +300,15 @@ const TechnicianWorkOrderDetail = () => {
     );
   }
 
+  // Aliases for renamed model fields
+  const materials = workOrder.materials || workOrder.parts || [];
+
   // Calculate totals
-  const partsCost = workOrder.parts.reduce((total, part) => {
+  const partsCost = materials.reduce((total, part) => {
     return total + (part.price * part.quantity);
   }, 0);
-  
-  const laborCost = workOrder.labor.reduce((total, labor) => {
+
+  const laborCost = (workOrder.labor || []).reduce((total, labor) => {
     const qty = labor.quantity || labor.hours || 0;
     return total + (qty * labor.rate);
   }, 0);
@@ -627,7 +630,7 @@ const TechnicianWorkOrderDetail = () => {
 
         {/* Parts Section - Read Only */}
         <Card title="Parts">
-          {workOrder.parts.length === 0 ? (
+          {materials.length === 0 ? (
             <div className="text-center py-6 text-gray-500">
               <p>No parts added.</p>
             </div>
@@ -654,7 +657,7 @@ const TechnicianWorkOrderDetail = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {workOrder.parts.map((part, index) => (
+                  {materials.map((part, index) => (
                     <tr key={index}>
                       <td className="px-4 py-2 whitespace-nowrap">
                         <div className="font-medium text-gray-900">

@@ -34,11 +34,12 @@ const VehicleDetail = () => {
         
         // Fetch vehicle details
         const vehicleResponse = await VehicleService.getVehicle(id);
-        setVehicle(vehicleResponse.data.vehicle);
-        
+        const fetchedVehicle = vehicleResponse.data.property || vehicleResponse.data.vehicle;
+        setVehicle(fetchedVehicle);
+
         // If customer is included in the response, set it
-        if (vehicleResponse.data.vehicle.customer && typeof vehicleResponse.data.vehicle.customer === 'object') {
-          setCustomer(vehicleResponse.data.vehicle.customer);
+        if (fetchedVehicle?.customer && typeof fetchedVehicle.customer === 'object') {
+          setCustomer(fetchedVehicle.customer);
         }
         
         // Fetch vehicle service history
@@ -57,7 +58,7 @@ const VehicleDetail = () => {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching vehicle data:', err);
-        setError('Failed to load vehicle data. Please try again later.');
+        setError('Failed to load property data. Please try again later.');
         setLoading(false);
       }
     };
@@ -98,7 +99,7 @@ const VehicleDetail = () => {
       
       // Reload the vehicle data
       const vehicleResponse = await VehicleService.getVehicle(id);
-      setVehicle(vehicleResponse.data.vehicle);
+      setVehicle(vehicleResponse.data.property || vehicleResponse.data.vehicle);
       
       // Reset the form and close modal
       setNewMileageRecord({
@@ -140,7 +141,7 @@ const VehicleDetail = () => {
       
       // Reload the vehicle data
       const vehicleResponse = await VehicleService.getVehicle(id);
-      setVehicle(vehicleResponse.data.vehicle);
+      setVehicle(vehicleResponse.data.property || vehicleResponse.data.vehicle);
       
     } catch (err) {
       console.error('Error deleting mileage record:', err);
@@ -151,7 +152,7 @@ const VehicleDetail = () => {
   if (loading) {
     return (
       <div className="container mx-auto flex justify-center items-center h-48">
-        <p>Loading vehicle data...</p>
+        <p>Loading property data...</p>
       </div>
     );
   }
@@ -170,7 +171,7 @@ const VehicleDetail = () => {
     return (
       <div className="container mx-auto">
         <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-          Vehicle not found.
+          Property not found.
         </div>
       </div>
     );
@@ -186,14 +187,14 @@ const VehicleDetail = () => {
     <div className="container mx-auto">
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">
-          {vehicle.year} {vehicle.make} {vehicle.model}
+          {vehicle.address?.street || (typeof vehicle.address === 'string' && vehicle.address) || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Property'}
         </h1>
         <div className="flex space-x-2">
           <Button
             to={`/properties/${id}/edit`}
             variant="primary"
           >
-            Edit Vehicle
+            Edit Property
           </Button>
           <Button
             variant="outline"
@@ -221,38 +222,45 @@ const VehicleDetail = () => {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card title="Vehicle Information">
+        <Card title="Property Information">
           <div className="space-y-2">
-            <div>
-              <p className="text-sm text-gray-500">Year, Make, Model</p>
-              <p className="font-medium">
-                {vehicle.year} {vehicle.make} {vehicle.model}
-              </p>
-            </div>
-            {vehicle.vin && (
+            {(vehicle.address?.street || (typeof vehicle.address === 'string' && vehicle.address)) && (
               <div>
-                <p className="text-sm text-gray-500">VIN</p>
-                <p className="font-medium">{vehicle.vin}</p>
+                <p className="text-sm text-gray-500">Address</p>
+                <p className="font-medium">
+                  {vehicle.address?.street || vehicle.address}
+                </p>
+                {(vehicle.address?.city || vehicle.address?.state) && (
+                  <p className="text-sm text-gray-600">
+                    {[vehicle.address.city, vehicle.address.state, vehicle.address.zip].filter(Boolean).join(', ')}
+                  </p>
+                )}
               </div>
             )}
-            {vehicle.licensePlate && (
+            {vehicle.propertyType && (
               <div>
-                <p className="text-sm text-gray-500">License Plate</p>
-                <p className="font-medium">{vehicle.licensePlate}</p>
+                <p className="text-sm text-gray-500">Property Type</p>
+                <p className="font-medium capitalize">{vehicle.propertyType}</p>
               </div>
             )}
-            <div>
-              <p className="text-sm text-gray-500">Current Mileage</p>
-              <p className="font-medium">
-                {formatMileage(vehicle.currentMileage)}
-                <button 
-                  onClick={() => setMileageModalOpen(true)}
-                  className="ml-2 text-blue-600 text-sm hover:text-blue-800"
-                >
-                  Update
-                </button>
-              </p>
-            </div>
+            {vehicle.stories > 1 && (
+              <div>
+                <p className="text-sm text-gray-500">Stories</p>
+                <p className="font-medium">{vehicle.stories}</p>
+              </div>
+            )}
+            {vehicle.roofType && (
+              <div>
+                <p className="text-sm text-gray-500">Roof Type</p>
+                <p className="font-medium capitalize">{vehicle.roofType}</p>
+              </div>
+            )}
+            {!vehicle.address && (vehicle.year || vehicle.make || vehicle.model) && (
+              <div>
+                <p className="text-sm text-gray-500">Description</p>
+                <p className="font-medium">{`${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()}</p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -285,9 +293,9 @@ const VehicleDetail = () => {
           </div>
         </Card>
 
-        <Card title="Vehicle Notes">
+        <Card title="Property Notes">
           <p className="text-gray-700">
-            {vehicle.notes || 'No notes available for this vehicle.'}
+            {vehicle.notes || 'No notes available for this property.'}
           </p>
         </Card>
       </div>
@@ -369,11 +377,11 @@ const VehicleDetail = () => {
           )}
         </Card>
 
-        <Card 
-          title="Service History" 
+        <Card
+          title="Work Orders"
           headerActions={
-            <Button 
-              to={`/work-orders/new?vehicle=${id}${customer ? `&customer=${customer._id}` : ''}`} 
+            <Button
+              to={`/work-orders/new?property=${id}${customer ? `&customer=${customer._id}` : ''}`}
               variant="outline"
               size="sm"
             >
@@ -383,7 +391,7 @@ const VehicleDetail = () => {
         >
           {serviceHistory.length === 0 ? (
             <div className="text-center py-6 text-gray-500">
-              <p>No service history found for this vehicle.</p>
+              <p>No work orders found for this property.</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
@@ -391,7 +399,9 @@ const VehicleDetail = () => {
                 <div key={workOrder._id} className="py-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-medium">{workOrder.serviceRequested}</p>
+                      <p className="font-medium">
+                        {workOrder.services?.map(s => s.description).join(', ') || workOrder.serviceRequested || 'Work Order'}
+                      </p>
                       <p className="text-sm text-gray-500">
                         {formatDate(workOrder.mostRecentAppointmentDate || workOrder.date)}
                       </p>
@@ -438,7 +448,7 @@ const VehicleDetail = () => {
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Delete</h3>
             <p className="text-gray-700 mb-6">
-              Are you sure you want to delete this vehicle? This action cannot be undone.
+              Are you sure you want to delete this property? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <Button

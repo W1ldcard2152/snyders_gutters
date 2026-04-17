@@ -160,13 +160,13 @@ const WorkflowSummary = () => {
     },
     {
       key: 'parts',
-      title: 'Waiting on Parts',
+      title: 'Waiting on Materials',
       icon: 'fas fa-box',
       color: 'amber',
       count: waitingOnParts.length,
       viewAllLink: '/work-orders',
       viewAllLabel: 'View work orders',
-      emptyMessage: 'No parts on order',
+      emptyMessage: 'No materials on order',
       items: waitingOnParts.slice(0, 5),
       renderItem: (wo) => {
         const ageBadge = getPartsAgeBadge(wo);
@@ -189,13 +189,13 @@ const WorkflowSummary = () => {
     },
     {
       key: 'pickup',
-      title: 'Awaiting Pickup',
-      icon: 'fas fa-car',
+      title: 'Awaiting Payment',
+      icon: 'fas fa-dollar-sign',
       color: 'green',
       count: awaitingPickup.length,
       viewAllLink: '/work-orders',
       viewAllLabel: 'View work orders',
-      emptyMessage: 'No vehicles awaiting pickup',
+      emptyMessage: 'No jobs awaiting payment',
       items: awaitingPickup.slice(0, 5),
       renderItem: (wo) => (
         <li

@@ -1,46 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import feedbackService from '../../services/feedbackService';
-import technicianService from '../../services/technicianService';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import TextArea from '../../components/common/TextArea';
-import SelectInput from '../../components/common/SelectInput';
 import { formatDate } from '../../utils/formatters';
 import usePersistedState from '../../hooks/usePersistedState';
+import { useAuth } from '../../contexts/AuthContext';
 
 const FeedbackAdminPage = () => {
+  const { currentUser } = useAuth();
   const [feedbackEntries, setFeedbackEntries] = useState([]);
   const [archivedFeedback, setArchivedFeedback] = useState([]);
   const [showArchived, setShowArchived] = usePersistedState('feedback:showArchived', false);
-  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentFeedback, setCurrentFeedback] = useState(null); // For edit/create
-  const [formData, setFormData] = useState({
-    user: '',
-    feedbackText: '',
-  });
+  const [currentFeedback, setCurrentFeedback] = useState(null);
+  const [formData, setFormData] = useState({ feedbackText: '' });
 
   useEffect(() => {
-    fetchFeedbackAndTechnicians();
+    fetchFeedback();
   }, []);
 
-  const fetchFeedbackAndTechnicians = async () => {
+  const fetchFeedback = async () => {
     try {
       setLoading(true);
-      const [feedbackResponse, techniciansResponse] = await Promise.all([
-        feedbackService.getAllFeedback(),
-        technicianService.getAllTechnicians()
-      ]);
-
+      const feedbackResponse = await feedbackService.getAllFeedback();
       const allFeedback = feedbackResponse.data.feedback;
       setFeedbackEntries(allFeedback.filter(f => !f.archived));
       setArchivedFeedback(allFeedback.filter(f => f.archived).sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt)));
-      setTechnicians(techniciansResponse.data.data.technicians.map(tech => ({
-        value: tech._id,
-        label: tech.name
-      })));
       setLoading(false);
     } catch (err) {
       setError('Failed to fetch data.');
@@ -56,7 +44,7 @@ const FeedbackAdminPage = () => {
 
   const handleCreateClick = () => {
     setCurrentFeedback(null);
-    setFormData({ user: '', feedbackText: '' });
+    setFormData({ feedbackText: '' });
     setIsModalOpen(true);
   };
 
@@ -76,10 +64,7 @@ const FeedbackAdminPage = () => {
 
   const handleEditClick = (feedback) => {
     setCurrentFeedback(feedback);
-    setFormData({
-      user: feedback.user._id,
-      feedbackText: feedback.feedbackText,
-    });
+    setFormData({ feedbackText: feedback.feedbackText });
     setIsModalOpen(true);
   };
 
@@ -87,7 +72,7 @@ const FeedbackAdminPage = () => {
     if (window.confirm('Are you sure you want to delete this feedback entry?')) {
       try {
         await feedbackService.deleteFeedback(id);
-        fetchFeedbackAndTechnicians(); // Refresh list
+        fetchFeedback();
       } catch (err) {
         setError('Failed to delete feedback.');
         console.error(err);
@@ -99,7 +84,7 @@ const FeedbackAdminPage = () => {
     if (window.confirm('Are you sure you want to archive this feedback entry?')) {
       try {
         await feedbackService.archiveFeedback(id);
-        fetchFeedbackAndTechnicians(); // Refresh list
+        fetchFeedback();
       } catch (err) {
         setError('Failed to archive feedback.');
         console.error(err);
@@ -113,7 +98,7 @@ const FeedbackAdminPage = () => {
         // TODO: Implement restore functionality in feedbackService and backend
         // await feedbackService.restoreFeedback(id);
         alert('Restore functionality not yet implemented.');
-        fetchFeedbackAndTechnicians(); // Refresh list
+        fetchFeedback();
       } catch (err) {
         setError('Failed to restore feedback.');
         console.error(err);
@@ -130,7 +115,7 @@ const FeedbackAdminPage = () => {
         await feedbackService.createFeedback(formData);
       }
       setIsModalOpen(false);
-      fetchFeedbackAndTechnicians(); // Refresh list
+      fetchFeedback();
     } catch (err) {
       setError('Failed to save feedback.');
       console.error(err);
@@ -230,16 +215,11 @@ const FeedbackAdminPage = () => {
           <Card className="w-full max-w-lg p-6">
             <h2 className="text-xl font-bold mb-4">{currentFeedback ? 'Edit Feedback' : 'Add Feedback'}</h2>
             <form onSubmit={handleModalSubmit}>
-              <div className="mb-4">
-                <SelectInput
-                  label="User"
-                  name="user"
-                  options={technicians}
-                  value={formData.user}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+              {currentUser && (
+                <p className="text-sm text-gray-500 mb-4">
+                  Submitting as <span className="font-medium">{currentUser.name}</span>
+                </p>
+              )}
               <div className="mb-4">
                 <TextArea
                   label="Feedback Text"
